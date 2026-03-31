@@ -53,6 +53,15 @@ const generalWords = [
   "zenith"
 ];
 
+const passwordOverlay = document.getElementById("password-overlay");
+const passwordInput = document.getElementById("password-input");
+const passwordSubmit = document.getElementById("password-submit");
+const passwordError = document.getElementById("password-error");
+const titleIcon = document.querySelector(".title-icon");
+
+const API_BASE = "https://wordle-auth.hajjelio1.workers.dev";
+const AUTH_KEY = "stupid-wordle-token";
+
 const dailyEntries = [
   ...oliverTwistWords.map(word => ({ word, theme: "Oliver Twist" })),
   ...lebanonWords.map(word => ({ word, theme: "Lebanon" })),
@@ -98,6 +107,9 @@ let gameOver = false;
 let isSubmitting = false;
 let boardState = Array.from({ length: maxRows }, () => null);
 let countdownTimer = null;
+let hintsUsed = savedState?.hintsUsed || 0;
+let gameStarted = false;
+let eventsBound = false;
 
 if (savedState && savedState.solutionIndex === solutionIndex) {
   currentRow = Math.min(savedState.currentRow ?? 0, maxRows - 1);
@@ -106,19 +118,116 @@ if (savedState && savedState.solutionIndex === solutionIndex) {
   boardState = Array.from({ length: maxRows }, (_, i) => savedState.boardState?.[i] ?? null);
 }
 
-buildGrid();
-buildKeyboard();
-restoreBoard();
-updateGrid();
+syncTitleIcon();
+initPasswordGate();
 
-let hintsUsed = savedState?.hintsUsed || 0;
+function syncTitleIcon() {
+  const favicon = document.querySelector('link[rel="icon"]');
+  if (!titleIcon || !favicon) return;
 
-if (gameOver) {
-  const winState = savedState?.won === true;
-  showEndModal(winState);
+  const href = favicon.getAttribute("href");
+  if (href) {
+    titleIcon.src = href;
+  }
 }
 
-hintButton.addEventListener("click", () => {
+async function unlockSite() {
+  const entered = passwordInput.value.trim();
+
+  try {
+    const res = await fetch(`${API_BASE}/unlock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: entered })
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      localStorage.setItem(AUTH_KEY, data.token);
+      passwordOverlay.style.display = "none";
+      passwordError.textContent = "";
+      startGame();
+    } else {
+      passwordError.textContent = "Wrong password.";
+    }
+  } catch {
+    passwordError.textContent = "Could not reach the server.";
+  }
+}
+
+async function initPasswordGate() {
+  const token = localStorage.getItem(AUTH_KEY);
+
+  if (token) {
+    try {
+      const res = await fetch(`${API_BASE}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+      });
+
+      const data = await res.json();
+
+      if (data.ok) {
+        passwordOverlay.style.display = "none";
+        startGame();
+        return;
+      }
+
+      localStorage.removeItem(AUTH_KEY);
+    } catch {
+      localStorage.removeItem(AUTH_KEY);
+    }
+  }
+
+  passwordOverlay.style.display = "flex";
+  passwordSubmit.addEventListener("click", unlockSite);
+  passwordInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") unlockSite();
+  });
+}
+
+function startGame() {
+  if (gameStarted) return;
+  gameStarted = true;
+
+  buildGrid();
+  buildKeyboard();
+  restoreBoard();
+  updateGrid();
+
+  if (gameOver) {
+    const winState = savedState?.won === true;
+    showEndModal(winState);
+  }
+
+  bindEvents();
+}
+
+function bindEvents() {
+  if (eventsBound) return;
+  eventsBound = true;
+
+  hintButton.addEventListener("click", handleHintClick);
+
+  document.addEventListener("keydown", (e) => {
+    if (gameOver || isSubmitting) return;
+    if (passwordOverlay.style.display !== "none") return;
+
+    if (e.key === "Enter") {
+      handleKeyPress("ENTER");
+    } else if (e.key === "Backspace") {
+      handleKeyPress("⌫");
+    } else if (/^[a-zA-Z]$/.test(e.key)) {
+      handleKeyPress(e.key.toUpperCase());
+    }
+  });
+}
+
+function handleHintClick() {
+  if (gameOver || isSubmitting) return;
+
   if (hintsUsed === 0) {
     showMessage(`Theme hint: ${currentTheme}`);
     hintsUsed++;
@@ -134,19 +243,7 @@ hintButton.addEventListener("click", () => {
   }
 
   showMessage("No more hints available.");
-});
-
-document.addEventListener("keydown", (e) => {
-  if (gameOver || isSubmitting) return;
-
-  if (e.key === "Enter") {
-    handleKeyPress("ENTER");
-  } else if (e.key === "Backspace") {
-    handleKeyPress("⌫");
-  } else if (/^[a-zA-Z]$/.test(e.key)) {
-    handleKeyPress(e.key.toUpperCase());
-  }
-});
+}
 
 function saveState(won = null) {
   const state = {
@@ -162,25 +259,32 @@ function saveState(won = null) {
   localStorage.setItem(storageKey, JSON.stringify(state));
 }
 
-function revealLetterHint() {
-  const unrevealed = [];
+function loadState() {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
+function revealLetterHint() {
+  const indices = [];
   for (let i = 0; i < wordLength; i++) {
-    unrevealed.push(i);
+    indices.push(i);
   }
 
-  const index = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+  const index = indices[Math.floor(Math.random() * indices.length)];
   const letter = solution[index];
-
   const tile = document.getElementById(`row-${currentRow}-col-${index}`);
+  if (!tile) return;
+
   tile.textContent = letter;
   tile.classList.add("present", "hint-reveal");
 
   setTimeout(() => tile.classList.remove("hint-reveal"), 600);
-
   showMessage("A letter has been revealed.");
 }
-
 
 function buildGrid() {
   grid.innerHTML = "";
@@ -233,6 +337,7 @@ function buildKeyboard() {
 
 function handleKeyPress(key) {
   if (gameOver || isSubmitting) return;
+  if (passwordOverlay.style.display !== "none") return;
 
   if (key === "ENTER") {
     submitGuess();
@@ -446,28 +551,6 @@ function showMessage(msg) {
       messageBoard.classList.remove("show");
     }
   }, 2200);
-}
-
-function saveState(won = null) {
-  const state = {
-    solutionIndex,
-    currentRow,
-    currentGuess,
-    gameOver,
-    won,
-    boardState
-  };
-
-  localStorage.setItem(storageKey, JSON.stringify(state));
-}
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
 }
 
 function showEndModal(won) {

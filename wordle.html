@@ -8,19 +8,30 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+	<div id="password-overlay" class="password-overlay">
+  <div class="password-box">
+    <h2>Enter password</h2>
+    <input id="password-input" type="password" placeholder="Password" autocomplete="current-password" />
+    <button id="password-submit" type="button">Enter</button>
+    <p id="password-error"></p>
+  </div>
+</div>
   <main class="shell">
     <section class="panel">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Daily themed word game</p>
-          <h1>THE STUPID WORDLE</h1>
-        </div>
+  <div class="title-block">
+    <div class="title-row">
+      <img src="puzzle.png" alt="Game icon" class="title-icon" />
+      <h1>THE STUPID WORDLE</h1>
+    </div>
+    <p class="eyebrow">Daily themed word game</p>
+  </div>
 
-        <div class="top-actions">
-          <button id="hint-button" class="hint-button">💡 Hint</button>
-          <div id="status" class="badge"></div>
-        </div>
-      </header>
+  <div class="top-actions">
+    <button id="hint-button" class="hint-button">💡 Hint</button>
+    <div id="status" class="badge"></div>
+  </div>
+</header>
 
       <div id="message-board"></div>
       <div id="lookup-status" class="lookup-status hidden">Checking dictionary...</div>
@@ -32,7 +43,7 @@
 
   <footer>
     <p>© 2026 Made by Elio El Hage</p>
-    <p>Archive: 276 words</p>
+    <p>Archive: 289 words</p>
   </footer>
 
   <div id="end-modal" class="modal hidden">
