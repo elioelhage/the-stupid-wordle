@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#121213" />
-  <title>Wordle Mobile Clone</title>
+  <title>The Stupid Wordle</title>
+  
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236aaa64'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-size='60' fill='white' font-family='sans-serif' font-weight='bold'>W</text></svg>" />
+  
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,18 +15,42 @@
     <header class="topbar">
       <div class="topbar__left">
         <p class="eyebrow">Daily Word</p>
-        <h1>WORDLE</h1>
+        <div class="title-wrap">
+          <svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <path d="M3 9h18"></path>
+            <path d="M9 21V9"></path>
+          </svg>
+          <h1>The Stupid Wordle</h1>
+        </div>
+        <p class="author-credit">Made by Elio El Hage</p>
       </div>
 
-      <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light mode">
-        <svg id="theme-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
-      </button>
+      <div class="topbar__right">
+        <button id="hint-button" class="icon-button" type="button" aria-label="Hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </button>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light mode">
+          <svg id="theme-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+        </button>
+      </div>
     </header>
 
     <main class="game" id="game">
-      <section class="status-card">
-        <p id="status-line" class="status-line">Tap the board or keyboard to type.</p>
-        <p id="meta-line" class="meta-line"></p>
+      <p id="meta-line" class="meta-line"></p>
+
+      <section id="instruction-card" class="status-card instruction-card">
+        <p class="status-line">Tap the board or keyboard to type.</p>
+        <button id="close-instruction" class="close-btn" aria-label="Close message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </section>
 
       <section class="board-wrap" aria-label="Word board">

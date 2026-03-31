@@ -20,21 +20,24 @@
   ];
 
   const DAILY_WORDS = WORDS.filter(word => /^[a-z]+$/.test(word) && word.length === 5);
-  const FALLBACK_WORD = "smile";
   const launchDate = Date.UTC(2024, 2, 30);
 
   const boardEl = document.getElementById("board");
   const keyboardEl = document.getElementById("keyboard");
   const messageEl = document.getElementById("message");
-  const statusLineEl = document.getElementById("status-line");
   const metaLineEl = document.getElementById("meta-line");
   const themeToggle = document.getElementById("theme-toggle");
   const themeIcon = document.getElementById("theme-icon");
+  const hintButton = document.getElementById("hint-button");
   const captureInput = document.getElementById("capture-input");
   const modal = document.getElementById("end-modal");
   const endTitle = document.getElementById("end-title");
   const countdownEl = document.getElementById("countdown");
   const closeModal = document.getElementById("close-modal");
+  
+  // Instruction Card UI
+  const instructionCard = document.getElementById("instruction-card");
+  const closeInstructionBtn = document.getElementById("close-instruction");
 
   if (!DAILY_WORDS.length) {
     throw new Error("No 5-letter words available.");
@@ -49,6 +52,7 @@
   const maxRows = 6;
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
+  const instructionDismissKey = "wordle-mobile-instruction-dismissed";
 
   let currentRow = 0;
   let currentGuess = "";
@@ -67,6 +71,7 @@
     boardState = Array.from({ length: maxRows }, (_, i) => savedState.boardState?.[i] ?? null);
   }
 
+  setupUI();
   setupTheme();
   setMetaText();
   buildBoard();
@@ -80,9 +85,14 @@
     showEndModal(Boolean(savedState?.won));
   }
 
+  function setupUI() {
+    if (localStorage.getItem(instructionDismissKey) === "true") {
+      instructionCard.classList.add("hidden");
+    }
+  }
+
   function setMetaText() {
-    metaLineEl.textContent = `${wordLength} letters · 6 tries`;
-    statusLineEl.textContent = "Tap the board or keyboard to type.";
+    metaLineEl.textContent = `${wordLength} letters · ${maxRows} tries`;
   }
 
   function setupTheme() {
@@ -191,6 +201,14 @@
       }
     });
 
+    closeInstructionBtn.addEventListener("click", () => {
+      instructionCard.classList.add("hidden");
+      localStorage.setItem(instructionDismissKey, "true");
+      focusCaptureInput();
+    });
+
+    hintButton.addEventListener("click", showHint);
+
     window.addEventListener("resize", () => {
       boardEl.style.setProperty("--tile-size", computeTileSize() + "px");
     });
@@ -248,6 +266,32 @@
   function focusCaptureInput() {
     if (gameOver) return;
     captureInput.focus({ preventScroll: true });
+  }
+
+  function showHint() {
+    if (gameOver || isSubmitting) return;
+    
+    // Find correctly guessed letters
+    const correctLetters = new Set();
+    for (const row of boardState) {
+      if (!row) continue;
+      for (let i = 0; i < wordLength; i++) {
+        if (row.colors[i] === "correct") {
+          correctLetters.add(row.guess[i]);
+        }
+      }
+    }
+
+    // Filter solution letters to find ones that haven't been placed correctly yet
+    const unrevealed = solution.split('').filter(l => !correctLetters.has(l));
+    
+    if (unrevealed.length > 0) {
+      const randomHintLetter = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+      showMessage(`Hint: Try finding a spot for '${randomHintLetter}'`);
+    } else {
+      showMessage("You've found all letters, now find their spots!");
+    }
+    focusCaptureInput();
   }
 
   function handleKey(key) {
@@ -461,7 +505,6 @@
       const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
       return response.ok;
     } catch {
-      // Keep the game playable even when the dictionary API is unreachable.
       return /^[a-z]+$/.test(word);
     }
   }
