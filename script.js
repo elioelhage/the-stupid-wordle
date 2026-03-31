@@ -26,15 +26,17 @@
   const boardEl = document.getElementById("board");
   const keyboardEl = document.getElementById("keyboard");
   const messageEl = document.getElementById("message");
-  const statusLineEl = document.getElementById("status-line");
   const metaLineEl = document.getElementById("meta-line");
   const themeToggle = document.getElementById("theme-toggle");
   const themeIcon = document.getElementById("theme-icon");
+  const hintButton = document.getElementById("hint-button");
   const captureInput = document.getElementById("capture-input");
   const modal = document.getElementById("end-modal");
   const endTitle = document.getElementById("end-title");
   const countdownEl = document.getElementById("countdown");
   const closeModal = document.getElementById("close-modal");
+  const tapTip = document.getElementById("tap-tip");
+  const dismissTip = document.getElementById("dismiss-tip");
 
   if (!DAILY_WORDS.length) {
     throw new Error("No 5-letter words available.");
@@ -49,6 +51,7 @@
   const maxRows = 6;
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
+  const tipKey = "wordle-mobile-tip-dismissed";
 
   let currentRow = 0;
   let currentGuess = "";
@@ -57,24 +60,27 @@
   let isSubmitting = false;
   let countdownTimer = null;
   let messageTimer = null;
-  let captureBuffer = "";
+  let hintUsed = false;
 
   const savedState = loadState();
   if (savedState && savedState.solutionIndex === solutionIndex) {
     currentRow = Math.min(savedState.currentRow ?? 0, maxRows - 1);
     currentGuess = typeof savedState.currentGuess === "string" ? savedState.currentGuess : "";
     gameOver = Boolean(savedState.gameOver);
+    hintUsed = Boolean(savedState.hintUsed);
     boardState = Array.from({ length: maxRows }, (_, i) => savedState.boardState?.[i] ?? null);
   }
 
   setupTheme();
   setMetaText();
+  setupTip();
   buildBoard();
   buildKeyboard();
   restoreBoard();
   updateBoard();
   updateKeyboardColorsFromBoard();
   bindEvents();
+  updateHintButtonState();
 
   if (gameOver) {
     showEndModal(Boolean(savedState?.won));
@@ -82,7 +88,6 @@
 
   function setMetaText() {
     metaLineEl.textContent = `${wordLength} letters · 6 tries`;
-    statusLineEl.textContent = "Tap the board or keyboard to type.";
   }
 
   function setupTheme() {
@@ -95,6 +100,17 @@
       const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
       setTheme(nextTheme);
       localStorage.setItem(themeKey, nextTheme);
+    });
+  }
+
+  function setupTip() {
+    const dismissed = localStorage.getItem(tipKey) === "1";
+    if (dismissed) tapTip.classList.add("hidden");
+
+    dismissTip.addEventListener("click", () => {
+      tapTip.classList.add("hidden");
+      localStorage.setItem(tipKey, "1");
+      focusCaptureInput();
     });
   }
 
@@ -161,7 +177,7 @@
       ["ENTER","Z","X","C","V","B","N","M","⌫"]
     ];
 
-    rows.forEach((letters, rowIndex) => {
+    rows.forEach((letters) => {
       const row = document.createElement("div");
       row.className = "keyboard-row";
       letters.forEach(letter => {
@@ -183,9 +199,11 @@
 
   function bindEvents() {
     boardEl.addEventListener("pointerdown", focusCaptureInput);
+    keyboardEl.addEventListener("pointerdown", focusCaptureInput);
+
     document.addEventListener("pointerdown", (event) => {
       if (event.target.closest(".modal")) return;
-      if (event.target.closest(".icon-button")) return;
+      if (event.target.closest(".icon-button") || event.target.closest(".tip-close")) return;
       if (!event.target.closest(".key")) {
         focusCaptureInput();
       }
@@ -222,7 +240,6 @@
       for (const letter of letters) {
         handleKey(letter);
       }
-      captureBuffer = "";
     });
 
     captureInput.addEventListener("keydown", (event) => {
@@ -235,14 +252,28 @@
       }
     });
 
-    captureInput.addEventListener("focus", () => {
-      captureBuffer = "";
-    });
+    captureInput.addEventListener("focus", () => {});
 
     closeModal.addEventListener("click", () => {
       hideEndModal();
       focusCaptureInput();
     });
+
+    hintButton.addEventListener("click", showHint);
+  }
+
+  function updateHintButtonState() {
+    hintButton.disabled = hintUsed || gameOver;
+    hintButton.setAttribute("aria-label", hintUsed ? "Hint already used" : "Show a hint");
+  }
+
+  function showHint() {
+    if (gameOver || hintUsed) return;
+    const vowels = (solution.match(/[AEIOU]/g) || []).length;
+    showMessage(`Hint: starts with ${solution[0]} · ${vowels} vowel${vowels === 1 ? "" : "s"}.`);
+    hintUsed = true;
+    updateHintButtonState();
+    saveState();
   }
 
   function focusCaptureInput() {
@@ -341,6 +372,7 @@
       if (guess === solution) {
         gameOver = true;
         saveState(true);
+        updateHintButtonState();
         showMessage("Solved.");
         showEndModal(true);
         isSubmitting = false;
@@ -353,6 +385,7 @@
       if (currentRow >= maxRows) {
         gameOver = true;
         saveState(false);
+        updateHintButtonState();
         showMessage(`The word was ${solution}.`);
         showEndModal(false);
       } else {
@@ -461,7 +494,6 @@
       const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
       return response.ok;
     } catch {
-      // Keep the game playable even when the dictionary API is unreachable.
       return /^[a-z]+$/.test(word);
     }
   }
@@ -511,6 +543,7 @@
       currentGuess,
       gameOver,
       won,
+      hintUsed,
       boardState
     };
     localStorage.setItem(storageKey, JSON.stringify(state));
