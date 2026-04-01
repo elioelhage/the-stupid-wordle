@@ -21,7 +21,7 @@
   
   // FIXED LAUNCH DATE: This syncs the math perfectly if RUINS was day 0 (March 30).
   // 2 = March, 30 = 30th. Let the math handle the offsets natively.
-  const launchDate = Date.UTC(2026, 2, 30);
+  const launchDate = Date.UTC(2026, 3, 1);
   
   const boardEl = document.getElementById("board");
   const keyboardEl = document.getElementById("keyboard");
@@ -71,16 +71,19 @@
   async function fetchTodaysWord() {
     if (WORD_SOURCE === "supabase") {
       try {
-        const res = await fetch(
-          `${supabaseUrl}/functions/v1/daily-word?day=${solutionIndex}`,
-          { headers: { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` } }
-        );
-        if (!res.ok) throw new Error("Edge function error");
-        const data = await res.json();
+        // Query the table directly (Make sure to replace 'daily_words' with your actual table name!)
+        const { data, error } = await supabase
+          .from('daily_words')
+          .select('word, category')
+          .eq('day_index', solutionIndex)
+          .single();
+
+        if (error) throw error;
+
         solution = data.word.toUpperCase();
         wordCategory = data.category;
       } catch (err) {
-        console.error("Failed to fetch word from Supabase, falling back to local", err);
+        console.error("Failed to fetch word from Supabase, falling back to local:", err);
         const obj = DAILY_WORDS[solutionIndex % DAILY_WORDS.length];
         solution = obj.word.toUpperCase();
         wordCategory = obj.category;
