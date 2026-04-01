@@ -4,15 +4,21 @@
   const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZWhzeG51ZGJ3anlkdmVubGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NzAsImV4cCI6MjA5MDY1Mjg3MH0.dPawhX90yZrme7nftMTq6A1j-KGqfHZJ8QnbBeFurl8';
   const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-  const WORDS = [
-    { word: "RUINS", category: "Lebanon" },
-    { word: "CREED", category: "Christianity" },
-    { word: "ENCORE", category: "Theater" },
-    // ... (Keep the rest of your WORDS array here) ...
-    { word: "SETS", category: "Theater" },
-  ];
+  const WORD_SOURCE = "supabase"; // Fetching from database now
 
-  const DAILY_WORDS = WORDS.filter(obj => obj.word && /^[a-zA-Z]+$/.test(obj.word));
+  // ─── HINT PENALTY CONSTANTS ────────────────────────────────────────────────
+  const HINT_PENALTY_1 = 8;   // 0.8 * 10
+  const HINT_PENALTY_2 = 15;  // 1.5 * 10
+  const GUESS_SCALE    = 10;  // multiply real guesses by this for DB storage
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Provide a safe fallback so the script doesn't crash if WORDS isn't loaded
+  const safeWords = typeof WORDS !== "undefined" ? WORDS : [
+    { word: "CEDAR", category: "Lebanon" },
+    { word: "RUINS", category: "Lebanon" } 
+  ];
+  const DAILY_WORDS = safeWords.filter(obj => obj.word && /^[a-zA-Z]+$/.test(obj.word));
+  
   const launchDate = Date.UTC(2026, 2, 31);
   const boardEl = document.getElementById("board");
   const keyboardEl = document.getElementById("keyboard");
@@ -35,39 +41,65 @@
   const statsView = document.getElementById("stats-view");
   const usernameInput = document.getElementById("username-input");
   const saveUsernameBtn = document.getElementById("save-username-btn");
+  const editNameBtn = document.getElementById("edit-name-btn");
   const tabBtns = document.querySelectorAll(".tab-btn");
   const lbLoading = document.getElementById("lb-loading");
   const lbList = document.getElementById("lb-list");
 
   const wordCache = {};
 
-  if (!DAILY_WORDS.length) {
-    throw new Error("No words available.");
-  }
-
   const today = new Date();
   const localDateAsUTC = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   const daysPassed = Math.max(0, Math.floor((localDateAsUTC - launchDate) / 86400000));
   
-  if (daysPassed >= DAILY_WORDS.length) {
+  // Only check for exhaustion if we are relying strictly on the local array
+  if (WORD_SOURCE !== "supabase" && daysPassed >= DAILY_WORDS.length) {
     document.body.innerHTML = "<h1 style='text-align:center; padding: 2rem; color: var(--text); font-family: sans-serif;'>We are out of words! Check back later.</h1>";
     throw new Error("Word list exhausted.");
   }
 
   const solutionIndex = daysPassed;
-  const activeSolutionObj = DAILY_WORDS[solutionIndex];
-  const solution = activeSolutionObj.word.toUpperCase();
-  const wordCategory = activeSolutionObj.category;
-  const wordLength = solution.length;
-  const maxRows = wordLength <= 5 ? 6 : wordLength + 1;
   
+  // ── Word loading: local or supabase ──────────────────────────────────────
+  let solution = "";
+  let wordCategory = "";
+  let wordLength = 0;
+  let maxRows = 0;
+
+  async function fetchTodaysWord() {
+    if (WORD_SOURCE === "supabase") {
+      try {
+        const res = await fetch(
+          `${supabaseUrl}/functions/v1/daily-word?day=${solutionIndex}`,
+          { headers: { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` } }
+        );
+        if (!res.ok) throw new Error("Edge function error");
+        const data = await res.json();
+        solution = data.word.toUpperCase();
+        wordCategory = data.category;
+      } catch (err) {
+        console.error("Failed to fetch word from Supabase, falling back to local", err);
+        const obj = DAILY_WORDS[solutionIndex % DAILY_WORDS.length];
+        solution = obj.word.toUpperCase();
+        wordCategory = obj.category;
+      }
+    } else {
+      const obj = DAILY_WORDS[solutionIndex];
+      solution = obj.word.toUpperCase();
+      wordCategory = obj.category;
+    }
+    wordLength = solution.length;
+    maxRows = wordLength <= 5 ? 6 : wordLength + 1;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
-  const userKey = "wordle-user-data"; // For UUID and Username
+  const userKey = "wordle-user-data"; 
 
   let currentRow = 0;
   let currentGuess = "";
-  let boardState = Array.from({ length: maxRows }, () => null);
+  let boardState = [];
   let gameOver = false;
   let isSubmitting = false;
   let countdownTimer = null;
@@ -75,7 +107,6 @@
   let hintsUsed = 0;
   let hasSubmittedToLeaderboard = false;
 
-  // UUID Generation
   function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -94,29 +125,33 @@
     return data;
   }
 
-  const savedState = loadState();
-  if (savedState && savedState.solutionIndex === solutionIndex) {
-    currentRow = Math.min(savedState.currentRow ?? 0, maxRows - 1);
-    currentGuess = typeof savedState.currentGuess === "string" ? savedState.currentGuess : "";
-    gameOver = Boolean(savedState.gameOver);
-    boardState = Array.from({ length: maxRows }, (_, i) => savedState.boardState?.[i] ?? null);
-    hintsUsed = savedState.hintsUsed || 0;
-    hasSubmittedToLeaderboard = savedState.hasSubmittedToLeaderboard || false;
-  }
+  // ── Kick off everything after the word is loaded ─────────────────────────
+  fetchTodaysWord().then(() => {
+    boardState = Array.from({ length: maxRows }, () => null);
 
-  setupTheme();
-  setMetaText();
-  buildBoard();
-  buildKeyboard();
-  restoreBoard();
-  updateBoard();
-  updateKeyboardColorsFromBoard();
-  updateHintBadge();
-  bindEvents();
+    const savedState = loadState();
+    if (savedState && savedState.solutionIndex === solutionIndex) {
+      currentRow = Math.min(savedState.currentRow ?? 0, maxRows - 1);
+      currentGuess = typeof savedState.currentGuess === "string" ? savedState.currentGuess : "";
+      gameOver = Boolean(savedState.gameOver);
+      boardState = Array.from({ length: maxRows }, (_, i) => savedState.boardState?.[i] ?? null);
+      hintsUsed = savedState.hintsUsed || 0;
+      hasSubmittedToLeaderboard = savedState.hasSubmittedToLeaderboard || false;
+    }
 
-  if (gameOver) {
-    showEndModal(Boolean(savedState?.won));
-  }
+    setupTheme();
+    setMetaText();
+    buildBoard();
+    buildKeyboard();
+    restoreBoard();
+    updateBoard();
+    updateKeyboardColorsFromBoard();
+    updateHintBadge();
+    bindEvents();
+
+    if (gameOver) showEndModal(Boolean(savedState?.won));
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   function setMetaText() {
     metaLineEl.textContent = `${wordLength} letters · ${maxRows} tries`;
@@ -143,9 +178,7 @@
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#121213" : "#ffffff");
   }
 
-  function moonIcon() {
-    return `<path d="M20 13.2A7.8 7.8 0 0 1 10.8 4a8.8 8.8 0 1 0 9.2 9.2Z"></path>`;
-  }
+  function moonIcon() { return `<path d="M20 13.2A7.8 7.8 0 0 1 10.8 4a8.8 8.8 0 1 0 9.2 9.2Z"></path>`; }
 
   function sunIcon() {
     return `
@@ -222,7 +255,7 @@
     });
 
     document.addEventListener("keydown", (event) => {
-      if (leaderboardModal.classList.contains("hidden") === false) return; // Ignore if modal open
+      if (leaderboardModal.classList.contains("hidden") === false) return; 
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === "Enter") {
         event.preventDefault();
@@ -245,32 +278,82 @@
     // Leaderboard Events
     leaderboardBtn.addEventListener("click", openLeaderboard);
     closeLeaderboardBtn.addEventListener("click", () => leaderboardModal.classList.add("hidden"));
+
+    if (editNameBtn) {
+      editNameBtn.addEventListener("click", () => {
+        statsView.classList.add("hidden");
+        usernameView.classList.remove("hidden");
+        usernameInput.value = getUserData().username || "";
+        saveUsernameBtn.textContent = "Update Name";
+      });
+    }
     
     saveUsernameBtn.addEventListener("click", async () => {
       const name = usernameInput.value.trim();
       if (name.length < 3) return showMessage("Name too short");
       
       const userData = getUserData();
-      userData.username = name;
-      
-      // Attempt to create user in DB
-      const { error } = await supabase.from('leaderboards').insert([
-        { uuid: userData.uuid, username: userData.username }
-      ]);
-      
-      if (error && error.code === '23505') { // Unique violation
-        showMessage("Username taken");
-        return;
+      saveUsernameBtn.textContent = "Saving...";
+      saveUsernameBtn.disabled = true;
+
+      try {
+        // 1. Check if the username is already taken by SOMEONE ELSE
+        const { data: existing } = await supabase
+          .from('leaderboards')
+          .select('uuid')
+          .eq('username', name)
+          .neq('uuid', userData.uuid) // Ignore our own UUID in the check
+          .maybeSingle();
+
+        if (existing) {
+          showMessage("Username taken");
+          return; 
+        }
+
+        // 2. Check if the user already has a record in the database
+        const { data: userRecord } = await supabase
+          .from('leaderboards')
+          .select('uuid')
+          .eq('uuid', userData.uuid)
+          .maybeSingle();
+
+        if (userRecord) {
+          // Update existing name
+          const { error: updateError } = await supabase
+            .from('leaderboards')
+            .update({ username: name })
+            .eq('uuid', userData.uuid);
+            
+          if (updateError) throw updateError;
+        } else {
+          // Insert new user
+          const { error: insertError } = await supabase.from('leaderboards').insert([
+            { uuid: userData.uuid, username: name, games_played: 0, total_guesses: 0, winstreak: 0, max_winstreak: 0 }
+          ]);
+          
+          if (insertError) throw insertError;
+        }
+        
+        // 3. Success! Update local storage and swap the UI views
+        userData.username = name;
+        localStorage.setItem(userKey, JSON.stringify(userData));
+        
+        usernameView.classList.add("hidden");
+        statsView.classList.remove("hidden");
+        loadLeaderboardData("avg");
+
+      } catch (error) {
+        console.error("Save error:", error);
+        showMessage("Could not save. Try again.");
+      } finally {
+        saveUsernameBtn.textContent = "Save Name";
+        saveUsernameBtn.disabled = false;
       }
-      
-      localStorage.setItem(userKey, JSON.stringify(userData));
-      usernameView.classList.add("hidden");
-      statsView.classList.remove("hidden");
-      loadLeaderboardData("avg");
     });
 
     tabBtns.forEach(btn => {
       btn.addEventListener("click", (e) => {
+        if (e.target.id === "edit-name-btn") return; // Ignore the edit button here
         tabBtns.forEach(b => b.classList.remove("active"));
         e.target.classList.add("active");
         loadLeaderboardData(e.target.dataset.tab);
@@ -289,47 +372,62 @@
     } else {
       usernameView.classList.add("hidden");
       statsView.classList.remove("hidden");
-      // Default to avg tab
-      tabBtns[0].click(); 
+      tabBtns[0].click(); // Default to avg tab
     }
   }
 
   async function loadLeaderboardData(type) {
     lbLoading.classList.remove("hidden");
+    lbLoading.textContent = "Loading...";
     lbList.classList.add("hidden");
     lbList.innerHTML = "";
 
     try {
       let data = [];
+
       if (type === "avg") {
-        // Min 3 games, ordered by fewest guesses (ascending)
         const { data: res, error } = await supabase
           .from('leaderboards')
           .select('username, games_played, total_guesses')
           .gte('games_played', 3);
         
-        if (!error && res) {
-           data = res.map(p => ({
-             ...p,
-             avg: (p.total_guesses / p.games_played).toFixed(2)
-           })).sort((a, b) => a.avg - b.avg).slice(0, 50);
+        if (error) throw error;
+
+        if (res && res.length > 0) {
+          data = res.map(p => ({
+            ...p,
+            avg: ((p.total_guesses / GUESS_SCALE) / p.games_played).toFixed(2)
+          })).sort((a, b) => a.avg - b.avg).slice(0, 50);
         }
+
       } else if (type === "streak") {
-        // Ordered by winstreak
         const { data: res, error } = await supabase
           .from('leaderboards')
-          .select('username, winstreak')
-          .order('winstreak', { ascending: false })
+          .select('username, winstreak, max_winstreak')
+          .order('max_winstreak', { ascending: false })
           .limit(50);
           
-        if (!error && res) data = res;
+        if (error) throw error;
+        if (res) data = res;
+      }
+
+      lbLoading.classList.add("hidden");
+      lbList.classList.remove("hidden");
+
+      if (data.length === 0) {
+        const msg = type === "avg"
+          ? "No players with 3+ games yet. Keep playing!"
+          : "No streaks to show yet. Win some games!";
+        lbList.innerHTML = `<li class="lb-item" style="justify-content:center; color: var(--muted); font-size:0.9rem;">${msg}</li>`;
+        return;
       }
 
       data.forEach((player, index) => {
         const li = document.createElement("li");
         li.className = "lb-item";
-        
-        const scoreVal = type === "avg" ? player.avg : player.winstreak;
+        const scoreVal = type === "avg"
+          ? player.avg
+          : (player.max_winstreak ?? player.winstreak ?? 0);
         
         li.innerHTML = `
           <div><span class="rank">#${index + 1}</span> ${player.username}</div>
@@ -337,47 +435,65 @@
         `;
         lbList.appendChild(li);
       });
-    } catch (e) {
-      console.error(e);
-    }
 
-    lbLoading.classList.add("hidden");
-    lbList.classList.remove("hidden");
+    } catch (e) {
+      console.error("Leaderboard Error", e);
+      lbLoading.classList.add("hidden");
+      lbList.classList.remove("hidden");
+      lbList.innerHTML = `<li class="lb-item" style="justify-content:center; color: var(--muted); font-size:0.9rem;">Failed to load. Check your connection.</li>`;
+    }
   }
 
-  async function updateUserStats(won, guessesTaken) {
+  async function updateUserStats(won, rawGuesses) {
     if (hasSubmittedToLeaderboard) return;
     
     const userData = getUserData();
-    if (!userData.username) return; // Only track stats if they've registered a name
+    if (!userData.username) return; 
+
+    let scaledPenalty = 0;
+    if (hintsUsed >= 1) scaledPenalty += HINT_PENALTY_1;
+    if (hintsUsed >= 2) scaledPenalty += HINT_PENALTY_2;
+
+    const scaledGuesses = (rawGuesses * GUESS_SCALE) + scaledPenalty;
 
     try {
-      // Fetch current stats
-      const { data: userRecord } = await supabase
+      const { data: userRecord, error: fetchError } = await supabase
         .from('leaderboards')
         .select('*')
         .eq('uuid', userData.uuid)
-        .single();
+        .maybeSingle();
 
-      if (userRecord) {
-        const updates = {
-          games_played: userRecord.games_played + 1,
-          total_guesses: userRecord.total_guesses + guessesTaken,
-          winstreak: won ? userRecord.winstreak + 1 : 0,
-        };
-        
-        if (updates.winstreak > userRecord.max_winstreak) {
-          updates.max_winstreak = updates.winstreak;
-        }
-
-        await supabase
-          .from('leaderboards')
-          .update(updates)
-          .eq('uuid', userData.uuid);
-          
-        hasSubmittedToLeaderboard = true;
-        saveState(won);
+      if (fetchError) {
+        console.error("Fetch user record error:", fetchError);
+        return;
       }
+
+      if (!userRecord) {
+        console.warn("No leaderboard record found for this user UUID.");
+        return;
+      }
+
+      const newWinstreak = won ? userRecord.winstreak + 1 : 0;
+      const updates = {
+        games_played: userRecord.games_played + 1,
+        total_guesses: userRecord.total_guesses + scaledGuesses,
+        winstreak: newWinstreak,
+        max_winstreak: Math.max(newWinstreak, userRecord.max_winstreak ?? 0),
+      };
+
+      const { error: updateError } = await supabase
+        .from('leaderboards')
+        .update(updates)
+        .eq('uuid', userData.uuid);
+
+      if (updateError) {
+        console.error("Error updating stats:", updateError);
+        return;
+      }
+        
+      hasSubmittedToLeaderboard = true;
+      saveState();
+
     } catch (e) {
       console.error("Error updating stats", e);
     }
@@ -389,6 +505,8 @@
     hintBadge.textContent = Math.max(0, hintsLeft);
     if (hintsLeft <= 0) {
       hintBadge.classList.add("empty");
+    } else {
+      hintBadge.classList.remove("empty");
     }
   }
 
@@ -575,7 +693,7 @@
     window.setTimeout(() => {
       if (guess === solution) {
         gameOver = true;
-        updateUserStats(true, currentRow + 1); // Submits to Leaderboard
+        updateUserStats(true, currentRow + 1); 
         saveState(true);
         showMessage("Solved.");
         showEndModal(true);
@@ -588,7 +706,7 @@
 
       if (currentRow >= maxRows) {
         gameOver = true;
-        updateUserStats(false, currentRow); // Submits to Leaderboard (Loss)
+        updateUserStats(false, maxRows); 
         saveState(false);
         showMessage(`The word was ${solution}.`);
         showEndModal(false);
@@ -691,12 +809,11 @@
   async function isValidWord(word) {
     if (word.length !== wordLength) return false;
 
-    // Always allow words from our list
+    // Always allow words from our fallback list just in case
     if (DAILY_WORDS.some(w => w.word.toLowerCase() === word)) return true;
 
     if (!/^[a-z]+$/.test(word)) return false;
 
-    // Cache check
     if (wordCache[word] !== undefined) {
       return wordCache[word];
     }
@@ -761,7 +878,7 @@
       won,
       boardState,
       hintsUsed,
-      hasSubmittedToLeaderboard // Make sure we don't submit to DB twice for the same game upon refresh
+      hasSubmittedToLeaderboard 
     };
     localStorage.setItem(storageKey, JSON.stringify(state));
   }

@@ -52,13 +52,10 @@
 
     <main class="game" id="game">
       <p id="meta-line" class="meta-line"></p>
-
       <section class="board-wrap" aria-label="Word board">
         <div id="board" class="board" aria-live="polite"></div>
       </section>
-
       <p id="message" class="message" aria-live="polite"></p>
-
       <section class="keyboard-wrap" aria-label="On-screen keyboard">
         <div id="keyboard" class="keyboard"></div>
       </section>
@@ -80,27 +77,26 @@
       
       <div id="username-view" class="hidden">
         <h2 class="modal__title">Join the Leaderboard</h2>
-        <p class="modal__countdown">Enter a username once. It's yours forever.</p>
+        <p class="modal__countdown">Set your display name below.</p>
         <input type="text" id="username-input" class="text-input" placeholder="Enter username..." maxlength="15" />
-        <button id="save-username-btn" class="primary-button" style="margin-top: 1rem;">Save & View</button>
+        <button id="save-username-btn" class="primary-button" style="margin-top: 1rem;">Save Name</button>
       </div>
 
       <div id="stats-view" class="hidden">
         <h2 class="modal__title">Leaderboards</h2>
         <div class="tabs">
-          <button class="tab-btn active" data-tab="avg">Avg Guesses</button>
+          <button class="tab-btn active" data-tab="avg">Avg Guesses (Min 3)</button>
           <button class="tab-btn" data-tab="streak">Winstreak</button>
+          <button id="edit-name-btn" class="tab-btn">Edit Name</button>
         </div>
-        
         <div class="tab-content">
           <div id="lb-loading" class="lb-loading">Loading...</div>
           <ul id="lb-list" class="lb-list hidden"></ul>
         </div>
       </div>
-
     </div>
   </div>
 
-  <script src="words.js"></script> <script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
