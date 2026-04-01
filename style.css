@@ -326,6 +326,7 @@ button { font: inherit; touch-action: manipulation; -webkit-tap-highlight-color:
   font-weight: 800;
   cursor: pointer;
 }
+
 /* Leaderboard Additions */
 .leaderboard-card {
   position: relative;
@@ -417,6 +418,24 @@ button { font: inherit; touch-action: manipulation; -webkit-tap-highlight-color:
   font-weight: 600;
 }
 
+/* Top 3 styling */
+.lb-item.rank-1 {
+  background: linear-gradient(135deg, #ffd700 0%, #f9b700 100%);
+  color: #1e1e1e;
+  border: 1px solid #ffc800;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+}
+.lb-item.rank-2 {
+  background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
+  color: #1e1e1e;
+  border: 1px solid #b0b0b0;
+}
+.lb-item.rank-3 {
+  background: linear-gradient(135deg, #cd7f32 0%, #b86f2c 100%);
+  color: #1e1e1e;
+  border: 1px solid #a05a1e;
+}
+
 .lb-item .rank {
   color: var(--muted);
   margin-right: 0.75rem;
@@ -425,6 +444,13 @@ button { font: inherit; touch-action: manipulation; -webkit-tap-highlight-color:
 
 .lb-item .score {
   color: var(--correct);
+}
+
+.error-message {
+  color: #d32f2f;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  text-align: left;
 }
 
 @keyframes pop { 

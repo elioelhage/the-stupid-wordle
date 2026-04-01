@@ -4,23 +4,22 @@
   const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZWhzeG51ZGJ3anlkdmVubGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NzAsImV4cCI6MjA5MDY1Mjg3MH0.dPawhX90yZrme7nftMTq6A1j-KGqfHZJ8QnbBeFurl8';
   const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-  const WORD_SOURCE = "supabase"; // Fetching from database now
+  const WORD_SOURCE = "supabase";
 
-  // ─── HINT PENALTY CONSTANTS ────────────────────────────────────────────────
-  const HINT_PENALTY_1 = 8;   // 0.8 * 10
-  const HINT_PENALTY_2 = 15;  // 1.5 * 10
+  // ─── HINT PENALTY CONSTANTS (now unused, kept for reference) ─────────────
+  // const HINT_PENALTY_1 = 8;   // not used
+  // const HINT_PENALTY_2 = 15;  // not used
   const GUESS_SCALE    = 10;  // multiply real guesses by this for DB storage
   // ──────────────────────────────────────────────────────────────────────────
 
-  // Provide a safe fallback so the script doesn't crash if WORDS isn't loaded
+  // Fallback word list (only used if supabase fails)
   const safeWords = typeof WORDS !== "undefined" ? WORDS : [
     { word: "CEDAR", category: "Lebanon" },
     { word: "RUINS", category: "Lebanon" } 
   ];
   const DAILY_WORDS = safeWords.filter(obj => obj.word && /^[a-zA-Z]+$/.test(obj.word));
   
-  // FIXED LAUNCH DATE: This syncs the math perfectly if RUINS was day 0 (March 30).
-  // 2 = March, 30 = 30th. Let the math handle the offsets natively.
+  // Fixed launch date
   const launchDate = Date.UTC(2026, 3, 1);
   
   const boardEl = document.getElementById("board");
@@ -44,6 +43,7 @@
   const statsView = document.getElementById("stats-view");
   const usernameInput = document.getElementById("username-input");
   const saveUsernameBtn = document.getElementById("save-username-btn");
+  const usernameError = document.getElementById("username-error");
   const tabBtns = document.querySelectorAll(".tab-btn");
   const lbLoading = document.getElementById("lb-loading");
   const lbList = document.getElementById("lb-list");
@@ -54,7 +54,6 @@
   const localDateAsUTC = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   const daysPassed = Math.max(0, Math.floor((localDateAsUTC - launchDate) / 86400000));
   
-  // Only check for exhaustion if we are relying strictly on the local array
   if (WORD_SOURCE !== "supabase" && daysPassed >= DAILY_WORDS.length) {
     document.body.innerHTML = "<h1 style='text-align:center; padding: 2rem; color: var(--text); font-family: sans-serif;'>We are out of words! Check back later.</h1>";
     throw new Error("Word list exhausted.");
@@ -62,7 +61,6 @@
 
   const solutionIndex = daysPassed;
   
-  // ── Word loading: local or supabase ──────────────────────────────────────
   let solution = "";
   let wordCategory = "";
   let wordLength = 0;
@@ -72,7 +70,7 @@
     if (WORD_SOURCE === "supabase") {
       try {
         const { data, error } = await supabase
-          .from('words') // <-- Your exact table name
+          .from('words')
           .select('word, category')
           .eq('day_index', solutionIndex)
           .single();
@@ -97,7 +95,6 @@
     wordLength = solution.length;
     maxRows = wordLength <= 5 ? 6 : wordLength + 1;
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
@@ -131,7 +128,6 @@
     return data;
   }
 
-  // ── Kick off everything after the word is loaded ─────────────────────────
   fetchTodaysWord().then(() => {
     boardState = Array.from({ length: maxRows }, () => null);
 
@@ -157,7 +153,6 @@
 
     if (gameOver) showEndModal(Boolean(savedState?.won));
   });
-  // ─────────────────────────────────────────────────────────────────────────
 
   function setMetaText() {
     metaLineEl.textContent = `${wordLength} letters · ${maxRows} tries`;
@@ -287,27 +282,33 @@
     
     saveUsernameBtn.addEventListener("click", async () => {
       const name = usernameInput.value.trim();
-      if (name.length < 3) return showMessage("Name too short");
+      usernameError.classList.add("hidden");
+      if (name.length < 3) {
+        usernameError.textContent = "Name too short (min 3 characters)";
+        usernameError.classList.remove("hidden");
+        return;
+      }
       
       const userData = getUserData();
       saveUsernameBtn.textContent = "Saving...";
       saveUsernameBtn.disabled = true;
 
       try {
-        // 1. Check if the username is already taken by SOMEONE ELSE
+        // Check if username already taken by someone else
         const { data: existing } = await supabase
           .from('leaderboards')
           .select('uuid')
           .eq('username', name)
-          .neq('uuid', userData.uuid) // Ignore our own UUID in the check
+          .neq('uuid', userData.uuid)
           .maybeSingle();
 
         if (existing) {
-          showMessage("Username taken");
+          usernameError.textContent = "Username already taken. Choose another.";
+          usernameError.classList.remove("hidden");
           return; 
         }
 
-        // 2. Check if the user already has a record in the database
+        // Check if user already has a record
         const { data: userRecord } = await supabase
           .from('leaderboards')
           .select('uuid')
@@ -320,18 +321,16 @@
             .from('leaderboards')
             .update({ username: name })
             .eq('uuid', userData.uuid);
-            
           if (updateError) throw updateError;
         } else {
           // Insert new user
           const { error: insertError } = await supabase.from('leaderboards').insert([
             { uuid: userData.uuid, username: name, games_played: 0, total_guesses: 0, winstreak: 0, max_winstreak: 0 }
           ]);
-          
           if (insertError) throw insertError;
         }
         
-        // 3. Success! Update local storage and swap the UI views
+        // Success! Update local storage and swap views
         userData.username = name;
         localStorage.setItem(userKey, JSON.stringify(userData));
         
@@ -341,7 +340,8 @@
 
       } catch (error) {
         console.error("Save error:", error);
-        showMessage("Could not save. Try again.");
+        usernameError.textContent = "Could not save. Try again.";
+        usernameError.classList.remove("hidden");
       } finally {
         saveUsernameBtn.textContent = "Save Name";
         saveUsernameBtn.disabled = false;
@@ -362,7 +362,6 @@
     leaderboardModal.classList.remove("hidden");
     const userData = getUserData();
     
-    // THE ULTIMATE LOCK: If username exists, the add name view physically cannot be reached
     if (!userData.username) {
       usernameView.classList.remove("hidden");
       statsView.classList.add("hidden");
@@ -383,10 +382,11 @@
       let data = [];
 
       if (type === "avg") {
+        // No minimum games filter
         const { data: res, error } = await supabase
           .from('leaderboards')
           .select('username, games_played, total_guesses')
-          .gte('games_played', 3);
+          .order('games_played', { ascending: false });
         
         if (error) throw error;
 
@@ -413,23 +413,30 @@
 
       if (data.length === 0) {
         const msg = type === "avg"
-          ? "No players with 3+ games yet. Keep playing!"
+          ? "No games played yet. Be the first!"
           : "No streaks to show yet. Win some games!";
         lbList.innerHTML = `<li class="lb-item" style="justify-content:center; color: var(--muted); font-size:0.9rem;">${msg}</li>`;
         return;
       }
 
-      // Renders names as plain text, no click handlers
       data.forEach((player, index) => {
         const li = document.createElement("li");
         li.className = "lb-item";
+        if (index === 0) li.classList.add("rank-1");
+        else if (index === 1) li.classList.add("rank-2");
+        else if (index === 2) li.classList.add("rank-3");
+
+        let medal = "";
+        if (index === 0) medal = "🥇 ";
+        else if (index === 1) medal = "🥈 ";
+        else if (index === 2) medal = "🥉 ";
         
         const scoreVal = type === "avg"
           ? player.avg
           : (player.max_winstreak ?? player.winstreak ?? 0);
         
         li.innerHTML = `
-          <div><span class="rank">#${index + 1}</span> ${player.username}</div>
+          <div><span class="rank">#${index + 1}</span> ${medal}${player.username}</div>
           <div class="score">${scoreVal}</div>
         `;
 
@@ -444,17 +451,14 @@
     }
   }
 
+  // Updated stats – no hint penalties
   async function updateUserStats(won, rawGuesses) {
     if (hasSubmittedToLeaderboard) return;
     
     const userData = getUserData();
     if (!userData.username) return; 
 
-    let scaledPenalty = 0;
-    if (hintsUsed >= 1) scaledPenalty += HINT_PENALTY_1;
-    if (hintsUsed >= 2) scaledPenalty += HINT_PENALTY_2;
-
-    const scaledGuesses = (rawGuesses * GUESS_SCALE) + scaledPenalty;
+    const scaledGuesses = rawGuesses * GUESS_SCALE; // no penalty added
 
     try {
       const { data: userRecord, error: fetchError } = await supabase
@@ -463,13 +467,8 @@
         .eq('uuid', userData.uuid)
         .maybeSingle();
 
-      if (fetchError) {
-        console.error("Fetch user record error:", fetchError);
-        return;
-      }
-
-      if (!userRecord) {
-        console.warn("No leaderboard record found for this user UUID.");
+      if (fetchError || !userRecord) {
+        console.error("Fetch error or no record:", fetchError);
         return;
       }
 
@@ -498,7 +497,6 @@
       console.error("Error updating stats", e);
     }
   }
-  // --- END LEADERBOARD LOGIC ---
 
   function updateHintBadge() {
     const hintsLeft = 2 - hintsUsed;
@@ -560,11 +558,27 @@
     overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   }
 
+  // New first hint: fetch definition
   function showHint() {
     if (gameOver || isSubmitting) return;
 
     if (hintsUsed === 0) {
-      showHintPopup("Category", wordCategory);
+      // First hint: fetch definition
+      showHintPopup("Loading...", "Looking up the word...");
+      fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${solution.toLowerCase()}`)
+        .then(response => response.ok ? response.json() : Promise.reject())
+        .then(data => {
+          if (data && data[0] && data[0].meanings && data[0].meanings[0].definitions) {
+            const definition = data[0].meanings[0].definitions[0].definition;
+            showHintPopup("Definition", definition);
+          } else {
+            throw new Error();
+          }
+        })
+        .catch(() => {
+          // Fallback to category
+          showHintPopup("Category", wordCategory);
+        });
       hintsUsed++;
       updateHintBadge();
       saveState();
@@ -572,6 +586,7 @@
     }
 
     if (hintsUsed === 1) {
+      // Second hint: reveal a missing letter
       const correctLetters = new Set();
       for (const row of boardState) {
         if (!row) continue;
@@ -809,7 +824,6 @@
   async function isValidWord(word) {
     if (word.length !== wordLength) return false;
 
-    // Always allow words from our fallback list just in case
     if (DAILY_WORDS.some(w => w.word.toLowerCase() === word)) return true;
 
     if (!/^[a-z]+$/.test(word)) return false;
