@@ -1,73 +1,75 @@
 (() => {
   const WORDS = [
-    { word: "TABERNACLE", category: "Christianity" }, { word: "CORNICHE", category: "Lebanon" }, { word: "ROOM", category: "General" }, { word: "COMEDY", category: "Theater" },
-    { word: "BIBLE", category: "Christianity" }, { word: "FALAFEL", category: "Lebanon" }, { word: "GLOVE", category: "General" }, { word: "DRAMA", category: "Theater" },
-    { word: "DIASPORA", category: "Lebanon" }, { word: "DIRECTOR", category: "Theater" }, { word: "BISHOP", category: "Christianity" }, { word: "GUITAR", category: "General" },
-    { word: "ACTRESS", category: "Theater" }, { word: "ZAATAR", category: "Lebanon" }, { word: "WATER", category: "General" }, { word: "RESURRECTION", category: "Christianity" },
-    { word: "SCARF", category: "General" }, { word: "ENCORE", category: "Theater" }, { word: "PRIEST", category: "Christianity" }, { word: "LIRA", category: "Lebanon" },
-    { word: "WIND", category: "General" }, { word: "PROPHET", category: "Christianity" }, { word: "DABKE", category: "Lebanon" }, { word: "MARQUEE", category: "Theater" },
-    { word: "ORTHODOX", category: "Christianity" }, { word: "SHIRT", category: "General" }, { word: "SPOTLIGHT", category: "Theater" }, { word: "BAKLAVA", category: "Lebanon" },
-    { word: "USHER", category: "Theater" }, { word: "SAINT", category: "Christianity" }, { word: "MOUNTAIN", category: "Lebanon" }, { word: "INSECT", category: "General" },
-    { word: "VATICAN", category: "Christianity" }, { word: "OPERA", category: "Theater" }, { word: "MILK", category: "General" }, { word: "BEACH", category: "Lebanon" },
-    { word: "PRAYER", category: "Christianity" }, { word: "STRIKE", category: "Theater" }, { word: "COAST", category: "Lebanon" }, { word: "SPACE", category: "General" },
-    { word: "PROPS", category: "Theater" }, { word: "KNAFEH", category: "Lebanon" }, { word: "DOOR", category: "General" }, { word: "HOLY", category: "Christianity" },
-    { word: "GARLIC", category: "Lebanon" }, { word: "LIGHT", category: "General" }, { word: "SERMON", category: "Christianity" }, { word: "WARDROBE", category: "Theater" },
-    { word: "BAPTISM", category: "Christianity" }, { word: "PIANO", category: "General" }, { word: "REHEARSAL", category: "Theater" }, { word: "HUMMUS", category: "Lebanon" },
-    { word: "WINTER", category: "Lebanon" }, { word: "TRAGEDY", category: "Theater" }, { word: "ANIMAL", category: "General" }, { word: "COMMUNION", category: "Christianity" },
-    { word: "BALCONY", category: "Theater" }, { word: "HEAVEN", category: "Christianity" }, { word: "BOAT", category: "General" }, { word: "TEMPLE", category: "Lebanon" },
-    { word: "PENCIL", category: "General" }, { word: "CROSS", category: "Christianity" }, { word: "PLAYWRIGHT", category: "Theater" }, { word: "LEVANT", category: "Lebanon" },
-    { word: "CHORUS", category: "Theater" }, { word: "LUTHERAN", category: "Christianity" }, { word: "TABBOULEH", category: "Lebanon" }, { word: "OCEAN", category: "General" },
-    { word: "EPISTLE", category: "Christianity" }, { word: "MEZZANINE", category: "Theater" }, { word: "FRUIT", category: "General" }, { word: "ROOTS", category: "Lebanon" },
-    { word: "APOSTLE", category: "Christianity" }, { word: "CLOCK", category: "General" }, { word: "CABARET", category: "Theater" }, { word: "ARAK", category: "Lebanon" },
-    { word: "ISLAND", category: "General" }, { word: "MONOLOGUE", category: "Theater" }, { word: "VILLAGE", category: "Lebanon" }, { word: "DISCIPLE", category: "Christianity" },
-    { word: "PRODUCER", category: "Theater" }, { word: "NUN", category: "Christianity" }, { word: "PLANE", category: "General" }, { word: "ROMAN", category: "Lebanon" },
-    { word: "POPE", category: "Christianity" }, { word: "MANAWEESH", category: "Lebanon" }, { word: "CHAIR", category: "General" }, { word: "SCENERY", category: "Theater" },
-    { word: "VALLEY", category: "Lebanon" }, { word: "GRACE", category: "Christianity" }, { word: "MUSICAL", category: "Theater" }, { word: "BREAD", category: "General" },
-    { word: "ROOF", category: "General" }, { word: "CREED", category: "Christianity" }, { word: "BLOCKING", category: "Theater" }, { word: "CEDAR", category: "Lebanon" },
-    { word: "CHOIR", category: "Christianity" }, { word: "PANTS", category: "General" }, { word: "OTTOMAN", category: "Lebanon" }, { word: "ACTOR", category: "Theater" },
-    { word: "SHORE", category: "Lebanon" }, { word: "JESUS", category: "Christianity" }, { word: "SCRIPT", category: "Theater" }, { word: "EARTH", category: "General" },
-    { word: "COMPANY", category: "Theater" }, { word: "STALACTITE", category: "Lebanon" }, { word: "RIVER", category: "General" }, { word: "PENANCE", category: "Christianity" },
-    { word: "CHURCH", category: "Christianity" }, { word: "VAUDEVILLE", category: "Theater" }, { word: "PINE", category: "Lebanon" }, { word: "WATCH", category: "General" },
-    { word: "FATTOUSH", category: "Lebanon" }, { word: "MONK", category: "Christianity" }, { word: "COLOR", category: "General" }, { word: "UNDERSTUDY", category: "Theater" },
-    { word: "TRINITY", category: "Christianity" }, { word: "BIRD", category: "General" }, { word: "THESPIAN", category: "Theater" }, { word: "FAMILY", category: "Lebanon" },
-    { word: "COAT", category: "General" }, { word: "APPLAUSE", category: "Theater" }, { word: "MINISTRY", category: "Christianity" }, { word: "MEDITERRANEAN", category: "Lebanon" },
-    { word: "MERCY", category: "Christianity" }, { word: "SHWARMA", category: "Lebanon" }, { word: "BALLET", category: "Theater" }, { word: "STAR", category: "General" },
-    { word: "DERBAKKE", category: "Lebanon" }, { word: "BRUSH", category: "General" }, { word: "REVELATION", category: "Christianity" }, { word: "CASTING", category: "Theater" },
-    { word: "SAVIOR", category: "Christianity" }, { word: "BACKSTAGE", category: "Theater" }, { word: "MEAT", category: "General" }, { word: "RUINS", category: "Lebanon" },
-    { word: "STAGE", category: "Theater" }, { word: "GOSPEL", category: "Christianity" }, { word: "PHONE", category: "General" }, { word: "TREE", category: "Lebanon" },
-    { word: "CATHOLIC", category: "Christianity" }, { word: "BICYCLE", category: "General" }, { word: "KIBBEH", category: "Lebanon" }, { word: "AUDIENCE", category: "Theater" },
-    { word: "FRENCH", category: "Lebanon" }, { word: "PROTESTANT", category: "Christianity" }, { word: "PAINT", category: "General" }, { word: "SCENE", category: "Theater" },
-    { word: "LENT", category: "Christianity" }, { word: "TABLE", category: "General" }, { word: "WINGS", category: "Theater" }, { word: "OLIVE", category: "Lebanon" },
-    { word: "BRACELET", category: "General" }, { word: "CHALICE", category: "Christianity" }, { word: "OVERTURE", category: "Theater" }, { word: "PHOENICIAN", category: "Lebanon" },
-    { word: "MATINEE", category: "Theater" }, { word: "MANDATE", category: "Lebanon" }, { word: "ALTAR", category: "Christianity" }, { word: "FISH", category: "General" },
-    { word: "ANGEL", category: "Christianity" }, { word: "FLOWER", category: "General" }, { word: "PIGEON", category: "Lebanon" }, { word: "REVIVAL", category: "Theater" },
-    { word: "BRIDGE", category: "General" }, { word: "DEACON", category: "Christianity" }, { word: "CLIFF", category: "Lebanon" }, { word: "DIALOGUE", category: "Theater" },
-    { word: "ROSARY", category: "Christianity" }, { word: "DANCE", category: "General" }, { word: "TROUPE", category: "Theater" }, { word: "SUMMER", category: "Lebanon" },
-    { word: "CAVE", category: "Lebanon" }, { word: "REPERTOIRE", category: "Theater" }, { word: "FAITH", category: "Christianity" }, { MOON: "General" },
-    { word: "HOUSE", category: "General" }, { word: "BAPTIST", category: "Christianity" }, { word: "IMPROV", category: "Theater" }, { word: "INDEPENDENCE", category: "Lebanon" },
-    { word: "BOOK", category: "General" }, { word: "GENESIS", category: "Christianity" }, { word: "ENSEMBLE", category: "Theater" }, { word: "BRANCH", category: "Lebanon" },
-    { word: "SNOW", category: "Lebanon" }, { word: "CRUCIFIX", category: "Christianity" }, { word: "PAPER", category: "General" }, { word: "GREENROOM", category: "Theater" },
-    { word: "EXODUS", category: "Christianity" }, { word: "CHEESE", category: "General" }, { word: "ROCKS", category: "Lebanon" }, { word: "LIGHTING", category: "Theater" },
-    { word: "TICKETS", category: "Theater" }, { word: "ABSOLUTION", category: "Christianity" }, { word: "STREET", category: "General" }, { word: "LABNEH", category: "Lebanon" },
-    { word: "COVENANT", category: "Christianity" }, { word: "ROAD", category: "General" }, { word: "PANTOMIME", category: "Theater" }, { word: "COFFEE", category: "Lebanon" },
-    { word: "CHOREOGRAPHY", category: "Theater" }, { word: "CONFESSION", category: "Christianity" }, { word: "TOUM", category: "Lebanon" }, { word: "DESERT", category: "General" },
-    { word: "CHRISTMAS", category: "Christianity" }, { word: "RING", category: "General" }, { word: "ORCHESTRA", category: "Theater" }, { word: "HALLOUMI", category: "Lebanon" },
-    { word: "FINJAAN", category: "Lebanon" }, { word: "SACRAMENT", category: "Christianity" }, { word: "SEASON", category: "Theater" }, { word: "COMPUTER", category: "General" },
-    { word: "BACKDROP", category: "Theater" }, { word: "SALVATION", category: "Christianity" }, { word: "TRAIN", category: "General" }, { word: "CARDAMOM", category: "Lebanon" },
-    { word: "REDEMPTION", category: "Christianity" }, { word: "PLANET", category: "General" }, { word: "NARGHILE", category: "Lebanon" }, { word: "PROMPTER", category: "Theater" },
-    { word: "WINDOW", category: "General" }, { word: "PARABLE", category: "Christianity" }, { word: "PERFORMANCE", category: "Theater" }, { word: "BYZANTINE", category: "Lebanon" },
-    { word: "SOLILOQUY", category: "Theater" }, { word: "EASTER", category: "Christianity" }, { word: "FOREST", category: "General" }, { word: "FLAG", category: "Lebanon" },
-    { word: "EUCHARIST", category: "Christianity" }, { word: "VEGETABLE", category: "General" }, { word: "BOXOFFICE", category: "Theater" }, { word: "HOSPITALITY", category: "Lebanon" },
-    { word: "RIGGING", category: "Theater" }, { word: "METHODIST", category: "Christianity" }, { word: "MEZZE", category: "Lebanon" }, { word: "TIME", category: "General" },
-    { word: "ADVENT", category: "Christianity" }, { word: "SOUND", category: "Theater" }, { word: "PATH", category: "General" }, { word: "COLUMN", category: "Lebanon" },
-    { word: "FESTIVAL", category: "Theater" }, { word: "VESPERS", category: "Christianity" }, { word: "VOICE", category: "General" }, { word: "SONG", category: "General" },
-    { word: "MATINS", category: "Christianity" }, { word: "FIRE", category: "General" }, { word: "INTERMISSION", category: "Theater" }, { word: "LITURGY", category: "Christianity" },
-    { word: "SHOE", category: "General" }, { word: "PREMIERE", category: "Theater" }, { word: "PSALM", category: "Christianity" }, { word: "NECKLACE", category: "General" },
-    { word: "DRUMS", category: "General" }, { word: "CURTAIN", category: "Theater" }, { word: "HYMN", category: "Christianity" }, { word: "DARK", category: "General" },
-    { word: "AUDITION", category: "Theater" }, { word: "MUSIC", category: "General" }, { word: "WALL", category: "General" }, { word: "FLOOR", category: "General" }
+    { word: "ACTOR", category: "Theater" }, { word: "GRACE", category: "Christianity" }, { word: "TRACK", category: "General" }, { word: "LABAN", category: "Lebanon" },
+    { word: "COFFEE", category: "Lebanon" }, { word: "SHEET", category: "General" }, { word: "CHURCH", category: "Christianity" }, { word: "CASTING", category: "Theater" },
+    { word: "BREAD", category: "General" }, { word: "KABIS", category: "Lebanon" }, { word: "STRIKE", category: "Theater" }, { word: "BISHOP", category: "Christianity" },
+    { word: "DABKE", category: "Lebanon" }, { word: "PIANO", category: "General" }, { word: "HEAVEN", category: "Christianity" }, { word: "TICKET", category: "Theater" },
+    { word: "SCARF", category: "General" }, { word: "ROOF", category: "General" }, { word: "THYME", category: "Lebanon" }, { word: "SINGER", category: "Theater" },
+    { word: "ROSARY", category: "Christianity" }, { word: "LEMON", category: "Lebanon" }, { word: "PRAYER", category: "Christianity" }, { word: "EARTH", category: "General" },
+    { word: "CUES", category: "Theater" }, { word: "CLIFF", category: "Lebanon" }, { word: "SAINT", category: "Christianity" }, { word: "COMEDY", category: "Theater" },
+    { word: "GLASS", category: "General" }, { word: "KAFTA", category: "Lebanon" }, { word: "MERCY", category: "Christianity" }, { word: "CHORUS", category: "Theater" },
+    { word: "BATATA", category: "Lebanon" }, { word: "GLOVE", category: "General" }, { word: "BIBLE", category: "Christianity" }, { word: "ACTRESS", category: "Theater" },
+    { word: "SWEET", category: "General" }, { word: "BEACH", category: "Lebanon" }, { word: "FAITH", category: "Christianity" }, { word: "PROPS", category: "Theater" },
+    { word: "HUMMUS", category: "Lebanon" }, { word: "COLOR", category: "General" }, { word: "SERMON", category: "Christianity" }, { word: "SCENE", category: "Theater" },
+    { word: "SPOON", category: "General" }, { word: "ZAATAR", category: "Lebanon" }, { word: "PARISH", category: "Christianity" }, { word: "TRAGIC", category: "Theater" },
+    { word: "GOSPEL", category: "Christianity" }, { word: "FAMILY", category: "Lebanon" }, { word: "DANCE", category: "General" }, { word: "SCRIPT", category: "Theater" },
+    { word: "KNAFEH", category: "Lebanon" }, { word: "PLANT", category: "General" }, { word: "PRIEST", category: "Christianity" }, { word: "STALLS", category: "Theater" },
+    { word: "HOUSE", category: "General" }, { word: "BALAD", category: "Lebanon" }, { word: "JESUS", category: "Christianity" }, { word: "BOWS", category: "Theater" },
+    { word: "FALAFEL", category: "Lebanon" }, { word: "KNIFE", category: "General" }, { word: "CHOIR", category: "Christianity" }, { word: "STAGE", category: "Theater" },
+    { word: "TRAIN", category: "General" }, { word: "SFIHA", category: "Lebanon" }, { word: "CREED", category: "Christianity" }, { word: "OPERA", category: "Theater" },
+    { word: "CEDAR", category: "Lebanon" }, { word: "NIGHT", category: "General" }, { word: "CHALICE", category: "Christianity" }, { word: "WINGS", category: "Theater" },
+    { word: "WATER", category: "General" }, { word: "AYYAM", category: "Lebanon" }, { word: "PSALM", category: "Christianity" }, { word: "EXTRA", category: "Theater" },
+    { word: "LABNEH", category: "Lebanon" }, { word: "BRUSH", category: "General" }, { word: "ALTAR", category: "Christianity" }, { word: "MASKS", category: "Theater" },
+    { word: "CLOCK", category: "General" }, { word: "HALAWA", category: "Lebanon" }, { word: "ANGEL", category: "Christianity" }, { word: "COMIC", category: "Theater" },
+    { word: "ZAHR", category: "Lebanon" }, { word: "PAPER", category: "General" }, { word: "DEACON", category: "Christianity" }, { word: "LINES", category: "Theater" },
+    { word: "SHIRT", category: "General" }, { word: "WATAN", category: "Lebanon" }, { word: "PENANCE", category: "Christianity" }, { word: "BALLET", category: "Theater" },
+    { word: "KIBBEH", category: "Lebanon" }, { word: "TABLE", category: "General" }, { word: "TRINITY", category: "Christianity" }, { word: "REVIEW", category: "Theater" },
+    { word: "PHONE", category: "General" }, { word: "JABAL", category: "Lebanon" }, { word: "SAVIOR", category: "Christianity" }, { word: "CRITIC", category: "Theater" },
+    { word: "BAKLAVA", category: "Lebanon" }, { word: "PAINT", category: "General" }, { word: "GENESIS", category: "Christianity" }, { word: "MAKEUP", category: "Theater" },
+    { word: "WATCH", category: "General" }, { word: "KEBAB", category: "Lebanon" }, { word: "EXODUS", category: "Christianity" }, { word: "CASTED", category: "Theater" },
+    { word: "CEDARS", category: "Lebanon" }, { word: "SMILE", category: "General" }, { word: "PARABLE", category: "Christianity" }, { word: "STAGED", category: "Theater" },
+    { word: "PANTS", category: "General" }, { word: "SAMAK", category: "Lebanon" }, { word: "EASTER", category: "Christianity" }, { word: "FARCE", category: "Theater" },
+    { word: "TAYEB", category: "Lebanon" }, { word: "LAUGH", category: "General" }, { word: "ADVENT", category: "Christianity" }, { word: "SATIRE", category: "Theater" },
+    { word: "GREEN", category: "General" }, { word: "YOGHURT", category: "Lebanon" }, { word: "VESPERS", category: "Christianity" }, { word: "PARODY", category: "Theater" },
+    { word: "SESAME", category: "Lebanon" }, { word: "BLACK", category: "General" }, { word: "MATINS", category: "Christianity" }, { word: "TIMING", category: "Theater" },
+    { word: "WHITE", category: "General" }, { word: "PASTRY", category: "Lebanon" }, { word: "LITURGY", category: "Christianity" }, { word: "THEME", category: "Theater" },
+    { word: "FATAYER", category: "Lebanon" }, { word: "HAPPY", category: "General" }, { word: "CLERGY", category: "Christianity" }, { word: "PLOT", category: "Theater" },
+    { word: "RAINY", category: "General" }, { word: "SHISH", category: "Lebanon" }, { word: "DIVINE", category: "Christianity" }, { word: "STORY", category: "Theater" },
+    { word: "TAOUK", category: "Lebanon" }, { word: "SUNNY", category: "General" }, { word: "PASTOR", category: "Christianity" }, { word: "CLIMAX", category: "Theater" },
+    { word: "MORNING", category: "General" }, { word: "ARABIC", category: "Lebanon" }, { word: "BELIEF", category: "Christianity" }, { word: "LYRICS", category: "Theater" },
+    { word: "SPICES", category: "Lebanon" }, { word: "SLEEP", category: "General" }, { word: "DEVOUT", category: "Christianity" }, { word: "DANCER", category: "Theater" },
+    { word: "DREAM", category: "General" }, { word: "NOUGAT", category: "Lebanon" }, { word: "SPIRIT", category: "Christianity" }, { word: "STAGES", category: "Theater" },
+    { word: "COAST", category: "Lebanon" }, { word: "GHOST", category: "General" }, { word: "CHANTS", category: "Christianity" }, { word: "PLAYED", category: "Theater" },
+    { word: "MAGIC", category: "General" }, { word: "GARLIC", category: "Lebanon" }, { word: "SHRINE", category: "Christianity" }, { word: "POSTER", category: "Theater" },
+    { word: "WINTER", category: "Lebanon" }, { word: "SPICY", category: "General" }, { word: "RELICS", category: "Christianity" }, { word: "FLYMAN", category: "Theater" },
+    { word: "SALTY", category: "General" }, { word: "LEVANT", category: "Lebanon" }, { word: "MARTYR", category: "Christianity" }, { word: "RIGGER", category: "Theater" },
+    { word: "ROOTS", category: "Lebanon" }, { word: "BITTER", category: "General" }, { word: "VIRTUE", category: "Christianity" }, { word: "ACTING", category: "Theater" },
+    { word: "METAL", category: "General" }, { word: "VILLAGE", category: "Lebanon" }, { word: "NOVICE", category: "Christianity" }, { word: "MIMIC", category: "Theater" },
+    { word: "ROMAN", category: "Lebanon" }, { word: "TRAIL", category: "General" }, { word: "SUNDAY", category: "Christianity" }, { word: "VOCAL", category: "Theater" },
+    { word: "CLOUD", category: "General" }, { word: "VALLEY", category: "Lebanon" }, { word: "ASHES", category: "Christianity" }, { word: "MIMES", category: "Theater" },
+    { word: "OTTOMAN", category: "Lebanon" }, { word: "FLOOR", category: "General" }, { word: "MYSTIC", category: "Christianity" }, { word: "BOOTH", category: "Theater" },
+    { word: "MUSIC", category: "General" }, { word: "SHWARMA", category: "Lebanon" }, { word: "SACRED", category: "Christianity" }, { word: "AISLE", category: "Theater" },
+    { word: "RUINS", category: "Lebanon" }, { word: "VOICE", category: "General" }, { word: "GLORY", category: "Christianity" }, { word: "FOYER", category: "Theater" },
+    { word: "WINDOW", category: "General" }, { word: "OLIVE", category: "Lebanon" }, { word: "RECTOR", category: "Christianity" }, { word: "CURTAIN", category: "Theater" },
+    { word: "PIGEON", category: "Lebanon" }, { word: "PLANET", category: "General" }, { word: "HOMILY", category: "Christianity" }, { word: "SOUND", category: "Theater" },
+    { word: "DESERT", category: "General" }, { word: "SUMMER", category: "Lebanon" }, { word: "PSALMS", category: "Christianity" }, { word: "IMPROV", category: "Theater" },
+    { word: "BRANCH", category: "Lebanon" }, { word: "STREET", category: "General" }, { word: "FRIAR", category: "Christianity" }, { word: "TROUPE", category: "Theater" },
+    { word: "CHEESE", category: "General" }, { word: "ROCKS", category: "Lebanon" }, { word: "CLERIC", category: "Christianity" }, { word: "REVIVAL", category: "Theater" },
+    { word: "FINJAAN", category: "Lebanon" }, { word: "FLOWER", category: "General" }, { word: "PIOUS", category: "Christianity" }, { word: "MUSICAL", category: "Theater" },
+    { word: "BICYCLE", category: "General" }, { word: "MEZZE", category: "Lebanon" }, { word: "SINNER", category: "Christianity" }, { word: "SCENERY", category: "Theater" },
+    { word: "COLUMN", category: "Lebanon" }, { word: "INSECT", category: "General" }, { word: "PROPHET", category: "Christianity" }, { word: "CABARET", category: "Theater" },
+    { word: "SPACE", category: "General" }, { word: "SOUKS", category: "Lebanon" }, { word: "BAPTISM", category: "Christianity" }, { word: "BALCONY", category: "Theater" },
+    { word: "LIGHT", category: "General" }, { word: "KAFTA", category: "Lebanon" }, { word: "EPISTLE", category: "Christianity" }, { word: "TRAGEDY", category: "Theater" },
+    { word: "ANIMAL", category: "General" }, { word: "FATTOUSH", category: "Lebanon" }, { word: "APOSTLE", category: "Christianity" }, { word: "ENCORE", category: "Theater" },
+    { word: "PENCIL", category: "General" }, { word: "MOUNTAIN", category: "Lebanon" }, { word: "VATICAN", category: "Christianity" }, { word: "MARQUEE", category: "Theater" },
+    { word: "OCEAN", category: "General" }, { word: "DIASPORA", category: "Lebanon" }, { word: "BAPTIST", category: "Christianity" }, { word: "USHER", category: "Theater" },
+    { word: "FRUIT", category: "General" }, { word: "CORNICHE", category: "Lebanon" }, { word: "CHORDS", category: "Christianity" }, { word: "DRAMA", category: "Theater" },
+    { word: "ISLAND", category: "General" }, { word: "TABBOULEH", category: "Lebanon" }, { word: "PALACE", category: "Christianity" }, { word: "TRUCK", category: "Theater" },
+    { word: "PLANE", category: "General" }, { word: "MANAWEESH", category: "Lebanon" }, { word: "TEMPLE", category: "Christianity" }, { word: "SETS", category: "Theater" },
+    { word: "CHAIR", category: "General" }, { word: "HALLOUMI", category: "Lebanon" }, { word: "SHRINE", category: "Christianity" }, { word: "ACTOR", category: "Theater" }
   ];
 
-  const DAILY_WORDS = WORDS.filter(obj => /^[a-zA-Z]+$/.test(obj.word));
+  const DAILY_WORDS = WORDS.filter(obj => obj.word && /^[a-zA-Z]+$/.test(obj.word));
   const launchDate = Date.UTC(2026, 2, 31);
   const boardEl = document.getElementById("board");
   const keyboardEl = document.getElementById("keyboard");
@@ -81,34 +83,30 @@
   const endTitle = document.getElementById("end-title");
   const countdownEl = document.getElementById("countdown");
   const closeModal = document.getElementById("close-modal");
-
-  const instructionCard = document.getElementById("instruction-card");
-  const closeInstructionBtn = document.getElementById("close-instruction");
+  const wordCache = {};
 
   if (!DAILY_WORDS.length) {
     throw new Error("No words available.");
   }
 
   const today = new Date();
-
   const localDateAsUTC = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   const daysPassed = Math.max(0, Math.floor((localDateAsUTC - launchDate) / 86400000));
-
+  
   if (daysPassed >= DAILY_WORDS.length) {
     document.body.innerHTML = "<h1 style='text-align:center; padding: 2rem; color: var(--text); font-family: sans-serif;'>We are out of words! Check back later.</h1>";
     throw new Error("Word list exhausted.");
   }
 
   const solutionIndex = daysPassed;
-
   const activeSolutionObj = DAILY_WORDS[solutionIndex];
   const solution = activeSolutionObj.word.toUpperCase();
   const wordCategory = activeSolutionObj.category;
   const wordLength = solution.length;
-  const maxRows = wordLength <= 5 ? 6 : wordLength + 1;  
+  const maxRows = wordLength <= 5 ? 6 : wordLength + 1;
+  
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
-  const instructionDismissKey = "wordle-mobile-instruction-dismissed";
 
   let currentRow = 0;
   let currentGuess = "";
@@ -128,7 +126,6 @@
     hintsUsed = savedState.hintsUsed || 0;
   }
 
-  setupUI();
   setupTheme();
   setMetaText();
   buildBoard();
@@ -143,15 +140,8 @@
     showEndModal(Boolean(savedState?.won));
   }
 
-  function setupUI() {
-    if (localStorage.getItem(instructionDismissKey) === "true") {
-      instructionCard.classList.add("hidden");
-    }
-  }
-
   function setMetaText() {
     metaLineEl.textContent = `${wordLength} letters · ${maxRows} tries`;
-
     boardEl.style.setProperty("--word-length", wordLength);
   }
 
@@ -249,11 +239,6 @@
   }
 
   function bindEvents() {
-    closeInstructionBtn.addEventListener("click", () => {
-      instructionCard.classList.add("hidden");
-      localStorage.setItem(instructionDismissKey, "true");
-    });
-
     hintButton.addEventListener("click", showHint);
 
     window.addEventListener("resize", () => {
@@ -302,7 +287,6 @@
 
     if (hintsUsed === 1) {
       const correctLetters = new Set();
-
       for (const row of boardState) {
         if (!row) continue;
         for (let i = 0; i < wordLength; i++) {
@@ -325,7 +309,6 @@
       }
       return;
     }
-
   }
 
   function handleKey(key) {
@@ -401,7 +384,13 @@
     const guess = currentGuess.toUpperCase();
     isSubmitting = true;
 
+    messageEl.textContent = "Loading...";
+    messageEl.classList.add("show");
+
     const valid = await isValidWord(guess.toLowerCase());
+    
+    messageEl.classList.remove("show");
+
     if (!valid) {
       showMessage("That word is not accepted.");
       shakeCurrentRow();
@@ -530,18 +519,32 @@
   }
 
   async function isValidWord(word) {
-    if (word.length !== wordLength) return false;
+  if (word.length !== wordLength) return false;
 
-    if (DAILY_WORDS.some(w => w.word.toLowerCase() === word.toLowerCase())) return true;
-    if (!/^[a-z]+$/.test(word)) return false;
+  // Always allow words from your list
+  if (DAILY_WORDS.some(w => w.word.toLowerCase() === word)) return true;
 
-    try {
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
-      return response.ok;
-    } catch {
-      return /^[a-z]+$/.test(word);
-    }
+  if (!/^[a-z]+$/.test(word)) return false;
+
+  // ✅ Cache check
+  if (wordCache[word] !== undefined) {
+    return wordCache[word];
   }
+
+  try {
+    const response = await fetch(
+      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`
+    );
+
+    const result = response.ok;
+    wordCache[word] = result; // store result
+    return result;
+
+  } catch {
+    wordCache[word] = false;
+    return false;
+  }
+}
 
   function showEndModal(won) {
     endTitle.textContent = won ? "You got it." : `The word was ${solution}`;

@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#121213" />
   <title>The Stupid Wordle</title>
-  
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236aaa64'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-size='60' fill='white' font-family='sans-serif' font-weight='bold'>W</text></svg>" />
-  
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -44,16 +42,6 @@
     <main class="game" id="game">
       <p id="meta-line" class="meta-line"></p>
 
-      <section id="instruction-card" class="status-card instruction-card">
-        <p class="status-line">Tap the keyboard to type.</p>
-        <button id="close-instruction" class="close-btn" aria-label="Close message">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </section>
-
       <section class="board-wrap" aria-label="Word board">
         <div id="board" class="board" aria-live="polite"></div>
       </section>
@@ -75,6 +63,7 @@
     </div>
   </div>
 
+  <script src="words.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
