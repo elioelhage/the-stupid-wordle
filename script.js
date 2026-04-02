@@ -1,11 +1,27 @@
 (() => {
+  // --- AUTOMATIC CACHE WIPE (UPGRADE TO V2) ---
+  const CURRENT_VERSION = "v2.0";
+  if (localStorage.getItem("wordle-version") !== CURRENT_VERSION) {
+    // Find all old game data and delete it
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith("wordle-")) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Set the new version so this only runs exactly once per person
+    localStorage.setItem("wordle-version", CURRENT_VERSION);
+    // Force reload the page to apply the fresh state
+    window.location.reload(true);
+    return; // Stop the rest of the script from running until reload finishes
+  }
+  // ---------------------------------------------
+
   // --- SUPABASE CONFIGURATION ---
   const supabaseUrl = 'https://hcehsxnudbwjydvenlfz.supabase.co';
   const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZWhzeG51ZGJ3anlkdmVubGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NzAsImV4cCI6MjA5MDY1Mjg3MH0.dPawhX90yZrme7nftMTq6A1j-KGqfHZJ8QnbBeFurl8';
   const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
   const WORD_SOURCE = "supabase";
-
   const GUESS_SCALE = 10;  // multiply real guesses by this for DB storage
 
   // Fallback word list (only used if supabase fails)
@@ -122,28 +138,7 @@
   function generateUUID() {
     return crypto.randomUUID();
   }
-	(() => {
-  // --- AUTOMATIC CACHE WIPE (UPGRADE TO V2) ---
-  const CURRENT_VERSION = "v2.0";
-  if (localStorage.getItem("wordle-version") !== CURRENT_VERSION) {
-    // Find all old game data and delete it
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith("wordle-")) {
-        localStorage.removeItem(key);
-      }
-    });
-    // Set the new version so this only runs exactly once per person
-    localStorage.setItem("wordle-version", CURRENT_VERSION);
-    // Force reload the page to apply the fresh state
-    window.location.reload(true);
-    return; // Stop the rest of the script from running until reload finishes
-  }
-  // ---------------------------------------------
 
-  // --- SUPABASE CONFIGURATION ---
-  const supabaseUrl = 'https://hcehsxnudbwjydvenlfz.supabase.co';
-  // ... rest of your code ...
-  
   function getUserData() {
     let data = localStorage.getItem(userKey);
     if (!data) {
@@ -310,7 +305,7 @@
     saveUsernameBtn.addEventListener("click", async () => {
         const name = usernameInput.value.trim();
         const rawPass = passwordInput.value.trim();
-        const pass = await hashPassword(rawPass); // Now 'pass' is a secure string of gibberish!
+        const pass = await hashPassword(rawPass); 
         usernameError.classList.add("hidden");
       
       if (name.length < 3) {
@@ -329,7 +324,6 @@
       saveUsernameBtn.disabled = true;
 
       try {
-        // 1. Check if the username already exists in the database
         const { data: existingUser, error: fetchError } = await supabase
           .from('leaderboards')
           .select('uuid, password')
@@ -337,20 +331,16 @@
           .maybeSingle();
 
         if (existingUser) {
-          // USER EXISTS -> Check password (LOGIN FLOW)
           if (existingUser.password === pass) {
-            // Password matches! Sync this device to the cloud profile
             userData.uuid = existingUser.uuid;
             userData.username = name;
             localStorage.setItem(userKey, JSON.stringify(userData));
           } else {
-            // Wrong password
             usernameError.textContent = "Username taken or wrong password.";
             usernameError.classList.remove("hidden");
             return;
           }
         } else {
-          // USER DOES NOT EXIST -> Create new record (REGISTER FLOW)
           const { error: insertError } = await supabase.from('leaderboards').insert([
             { 
               uuid: userData.uuid, 
@@ -369,7 +359,6 @@
           localStorage.setItem(userKey, JSON.stringify(userData));
         }
         
-        // Success! Swap views and load leaderboard
         usernameView.classList.add("hidden");
         statsView.classList.remove("hidden");
         loadLeaderboardData("avg");
@@ -418,7 +407,6 @@
       let data = [];
 
       if (type === "avg") {
-        // Select total_hints added here
         const { data: res, error } = await supabase
           .from('leaderboards')
           .select('username, games_played, total_guesses, total_hints')
@@ -434,7 +422,6 @@
         }
 
       } else if (type === "streak") {
-        // Select total_hints added here
         const { data: res, error } = await supabase
           .from('leaderboards')
           .select('username, winstreak, max_winstreak, total_hints')
@@ -456,7 +443,6 @@
         return;
       }
 
-      // Grab the current user's name so we can highlight them
       const currentUser = getUserData().username;
 
       data.forEach((player, index) => {
@@ -475,7 +461,6 @@
           ? player.avg
           : (player.max_winstreak ?? player.winstreak ?? 0);
         
-        // The Hint Badge: Only shows up if they have used at least 1 hint
         let hintBadge = "";
         if (player.total_hints > 0) {
           hintBadge = ` <span style="font-size: 0.8em; opacity: 0.8;" title="${player.total_hints} hints used all-time">💡${player.total_hints}</span>`;
@@ -483,7 +468,6 @@
 
         let displayName = player.username + hintBadge;
 
-        // Check if this row belongs to the person looking at the screen
         if (player.username === currentUser) {
           displayName += " <i style='opacity: 0.6; font-weight: normal; font-size: 0.85em;'>(Me)</i>";
         }
@@ -504,7 +488,6 @@
     }
   }
 
-  // Updated stats – no hint penalties, but tracks total hints
   async function updateUserStats(won, rawGuesses, hints) {
     if (hasSubmittedToLeaderboard) return;
     
@@ -528,7 +511,7 @@
         total_guesses: userRecord.total_guesses + scaledGuesses,
         winstreak: newWinstreak,
         max_winstreak: Math.max(newWinstreak, userRecord.max_winstreak ?? 0),
-        total_hints: (userRecord.total_hints || 0) + hints // <-- Adds the hints to their permanent record
+        total_hints: (userRecord.total_hints || 0) + hints
       };
 
       await supabase.from('leaderboards').update(updates).eq('uuid', userData.uuid);
@@ -601,12 +584,10 @@
     overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   }
 
-  // New first hint: fetch definition
   function showHint() {
     if (gameOver || isSubmitting) return;
 
     if (hintsUsed === 0) {
-      // First hint: fetch definition
       showHintPopup("Loading...", "Looking up the word...");
       fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${solution.toLowerCase()}`)
         .then(response => response.ok ? response.json() : Promise.reject())
@@ -619,7 +600,6 @@
           }
         })
         .catch(() => {
-          // Fallback to category
           showHintPopup("Category", wordCategory);
         });
       hintsUsed++;
@@ -629,7 +609,6 @@
     }
 
     if (hintsUsed === 1) {
-      // Second hint: reveal a missing letter
       const correctLetters = new Set();
       for (const row of boardState) {
         if (!row) continue;
@@ -751,7 +730,7 @@
     window.setTimeout(() => {
       if (guess === solution) {
         gameOver = true;
-        updateUserStats(true, currentRow + 1, hintsUsed); // Passed hintsUsed here
+        updateUserStats(true, currentRow + 1, hintsUsed); 
         saveState(true);
         showMessage("Solved.");
         showEndModal(true);
@@ -764,7 +743,7 @@
 
       if (currentRow >= maxRows) {
         gameOver = true;
-        updateUserStats(false, maxRows, hintsUsed); // Passed hintsUsed here
+        updateUserStats(false, maxRows, hintsUsed); 
         saveState(false);
         showMessage(`The word was ${solution}.`);
         showEndModal(false);
@@ -926,7 +905,6 @@
     countdownTimer = setInterval(update, 1000);
   }
 
-  // Scrambles the password into a secure hash before sending to Supabase
   async function hashPassword(password) {
     const msgBuffer = new TextEncoder().encode(password);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
