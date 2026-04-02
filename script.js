@@ -122,7 +122,28 @@
   function generateUUID() {
     return crypto.randomUUID();
   }
+	(() => {
+  // --- AUTOMATIC CACHE WIPE (UPGRADE TO V2) ---
+  const CURRENT_VERSION = "v2.0";
+  if (localStorage.getItem("wordle-version") !== CURRENT_VERSION) {
+    // Find all old game data and delete it
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith("wordle-")) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Set the new version so this only runs exactly once per person
+    localStorage.setItem("wordle-version", CURRENT_VERSION);
+    // Force reload the page to apply the fresh state
+    window.location.reload(true);
+    return; // Stop the rest of the script from running until reload finishes
+  }
+  // ---------------------------------------------
 
+  // --- SUPABASE CONFIGURATION ---
+  const supabaseUrl = 'https://hcehsxnudbwjydvenlfz.supabase.co';
+  // ... rest of your code ...
+  
   function getUserData() {
     let data = localStorage.getItem(userKey);
     if (!data) {
