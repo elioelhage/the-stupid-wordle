@@ -463,27 +463,30 @@ button { font: inherit; touch-action: manipulation; -webkit-tap-highlight-color:
 }
 
 .lb-item .score {
-  color: var(--correct);
+  color: var(--text);
 }
 
 /* Leaderboard header with logout */
 .lb-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  justify-content: grid;
+  gap: 180px;
   margin-bottom: 0.8rem;
+  
 }
 
 /* Red logout button */
 .leaderboard-logout {
   width: 2.2rem;
-  height: 2.2rem;
+  height: 2.05rem;
   border: none;
   background: transparent;
   color: #d32f2f;
   display: grid;
-  place-items: center;
+  position: absolute;
+  right: 40px;
+  place-items: right;
   cursor: pointer;
 }
 
