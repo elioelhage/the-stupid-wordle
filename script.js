@@ -36,6 +36,8 @@
   const closeModal = document.getElementById("close-modal");
 
   // Leaderboard Elements
+  const usernameInput = document.getElementById("username-input");
+  const passwordInput = document.getElementById("password-input"); // ADD THIS LINE
   const leaderboardBtn = document.getElementById("leaderboard-button");
   const leaderboardModal = document.getElementById("leaderboard-modal");
   const closeLeaderboardBtn = document.getElementById("close-leaderboard");
@@ -282,9 +284,16 @@
     
     saveUsernameBtn.addEventListener("click", async () => {
       const name = usernameInput.value.trim();
+      const pass = passwordInput.value.trim();
       usernameError.classList.add("hidden");
+      
       if (name.length < 3) {
         usernameError.textContent = "Name too short (min 3 characters)";
+        usernameError.classList.remove("hidden");
+        return;
+      }
+      if (pass.length < 3) {
+        usernameError.textContent = "Password too short (min 3 characters)";
         usernameError.classList.remove("hidden");
         return;
       }
@@ -294,41 +303,59 @@
       saveUsernameBtn.disabled = true;
 
       try {
-        // Check if username already taken by someone else
-        const { data: existing } = await supabase
+        // 1. Check if the username already exists in the database
+        const { data: existingUser, error: fetchError } = await supabase
           .from('leaderboards')
-          .select('uuid')
+          .select('uuid, password')
           .eq('username', name)
-          .neq('uuid', userData.uuid)
           .maybeSingle();
 
-        if (existing) {
-          usernameError.textContent = "Username already taken. Choose another.";
-          usernameError.classList.remove("hidden");
-          return; 
-        }
-
-        // Check if user already has a record
-        const { data: userRecord } = await supabase
-          .from('leaderboards')
-          .select('uuid')
-          .eq('uuid', userData.uuid)
-          .maybeSingle();
-
-        if (userRecord) {
-          // Update existing name
-          const { error: updateError } = await supabase
-            .from('leaderboards')
-            .update({ username: name })
-            .eq('uuid', userData.uuid);
-          if (updateError) throw updateError;
+        if (existingUser) {
+          // USER EXISTS -> Check password (LOGIN FLOW)
+          if (existingUser.password === pass) {
+            // Password matches! Sync this device to the cloud profile
+            userData.uuid = existingUser.uuid;
+            userData.username = name;
+            localStorage.setItem(userKey, JSON.stringify(userData));
+          } else {
+            // Wrong password
+            usernameError.textContent = "Username taken or wrong password.";
+            usernameError.classList.remove("hidden");
+            return;
+          }
         } else {
-          // Insert new user
+          // USER DOES NOT EXIST -> Create new record (REGISTER FLOW)
           const { error: insertError } = await supabase.from('leaderboards').insert([
-            { uuid: userData.uuid, username: name, games_played: 0, total_guesses: 0, winstreak: 0, max_winstreak: 0 }
+            { 
+              uuid: userData.uuid, 
+              username: name, 
+              password: pass, // Saving plain text since it's just a game for friends
+              games_played: 0, 
+              total_guesses: 0, 
+              winstreak: 0, 
+              max_winstreak: 0 
+            }
           ]);
           if (insertError) throw insertError;
+          
+          userData.username = name;
+          localStorage.setItem(userKey, JSON.stringify(userData));
         }
+        
+        // Success! Swap views and load leaderboard
+        usernameView.classList.add("hidden");
+        statsView.classList.remove("hidden");
+        loadLeaderboardData("avg");
+
+      } catch (error) {
+        console.error("Save error:", error);
+        usernameError.textContent = "Could not save. Try again.";
+        usernameError.classList.remove("hidden");
+      } finally {
+        saveUsernameBtn.textContent = "Login / Register";
+        saveUsernameBtn.disabled = false;
+      }
+    });
         
         // Success! Update local storage and swap views
         userData.username = name;
