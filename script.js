@@ -35,6 +35,7 @@
   const themeIcon = document.getElementById("theme-icon");
   const hintButton = document.getElementById("hint-button");
   const hintBadge = document.getElementById("hint-badge");
+  const appLoader = document.getElementById("app-loader");
   const modal = document.getElementById("end-modal");
   const endTitle = document.getElementById("end-title");
   const countdownEl = document.getElementById("countdown");
@@ -54,13 +55,6 @@
   const lbLoading = document.getElementById("lb-loading");
   const lbList = document.getElementById("lb-list");
 
-  // Notifications
-  const notifBtn = document.getElementById("notif-button");
-  const notifModal = document.getElementById("notif-modal");
-  const closeNotifBtn = document.getElementById("close-notif");
-  const notifSelect = document.getElementById("notif-select");
-  const saveNotifBtn = document.getElementById("save-notif-btn");
-
   const wordCache = {};
   const today = new Date();
   const localDateAsUTC = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
@@ -79,6 +73,7 @@
   }
 
   const solutionIndex = daysPassed;
+  const reminderSentKey = `wordle-reminder-sent-${solutionIndex}`;
   let solution = "";
   let wordCategory = "";
   let wordLength = 0;
@@ -98,6 +93,8 @@
   let messageTimer = null;
   let hintsUsed = 0;
   let hasSubmittedToLeaderboard = false;
+  let noonReminderTimeout = null;
+  let noonReminderInterval = null;
 
   function generateUUID() { return crypto.randomUUID(); }
 
@@ -191,9 +188,20 @@
     updateKeyboardColorsFromBoard();
     updateHintBadge();
     bindEvents();
+    initializeDailyNotifications();
+    hideAppLoader();
     
     if (gameOver) showEndModal(Boolean(savedState?.won));
   });
+
+  function hideAppLoader() {
+    if (!appLoader) return;
+    // Small delay so the transition feels intentional and smooth.
+    window.setTimeout(() => {
+      appLoader.classList.add("is-hidden");
+      window.setTimeout(() => appLoader.remove(), 500);
+    }, 180);
+  }
 
   function setMetaText() {
     metaLineEl.textContent = `${wordLength} letters · ${maxRows} tries`;
@@ -296,43 +304,6 @@
     leaderboardBtn.addEventListener("click", openLeaderboard);
     closeLeaderboardBtn.addEventListener("click", () => leaderboardModal.classList.add("hidden"));
 
-    // Notifications Events
-    if (notifBtn) {
-      notifBtn.addEventListener("click", () => {
-        notifSelect.value = localStorage.getItem("wordle-notif-pref") || "off";
-        notifModal.classList.remove("hidden");
-      });
-    }
-
-    if (closeNotifBtn) {
-      closeNotifBtn.addEventListener("click", () => notifModal.classList.add("hidden"));
-    }
-
-    if (saveNotifBtn) {
-      saveNotifBtn.addEventListener("click", async () => {
-        const pref = notifSelect.value;
-        if (pref !== "off" && "Notification" in window) {
-          let perm = Notification.permission;
-          if (perm !== "granted") perm = await Notification.requestPermission();
-          if (perm !== "granted") {
-            alert("Notifications are disabled in your browser. Please allow them.");
-            return;
-          } else {
-            new Notification("Notifications Enabled!", {
-              body: `We'll remind you ${pref}.`,
-              icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236aaa64'/></svg>"
-            });
-          }
-        }
-        localStorage.setItem("wordle-notif-pref", pref);
-        const userData = getUserData();
-        if (userData.username) {
-          supabase.from('leaderboards').update({ notification_pref: pref }).eq('uuid', userData.uuid).then();
-        }
-        notifModal.classList.add("hidden");
-      });
-    }
-
     saveUsernameBtn.addEventListener("click", async () => {
       const name = usernameInput.value.trim();
       const rawPass = passwordInput.value.trim();
@@ -420,6 +391,75 @@
         loadLeaderboardData(e.target.dataset.tab);
       });
     });
+  }
+
+  function initializeDailyNotifications() {
+    if (!("Notification" in window)) return;
+
+    // Behavior:
+    // - default => ask on load
+    // - granted => don't ask again, just schedule reminders
+    // - denied => don't ask again
+    if (Notification.permission === "granted") {
+      scheduleDailyNoonReminder();
+      return;
+    }
+
+    if (Notification.permission === "default") {
+      Notification.requestPermission()
+        .then((permission) => {
+          if (permission === "granted") {
+            scheduleDailyNoonReminder();
+          }
+        })
+        .catch(() => {});
+    }
+  }
+
+  function isTodaysWordDone() {
+    const state = loadState();
+    return Boolean(state && state.solutionIndex === solutionIndex && state.gameOver);
+  }
+
+  function currentDayStamp() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }
+
+  function maybeSendDailyReminder() {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    if (isTodaysWordDone()) return;
+
+    const dayStamp = currentDayStamp();
+    if (localStorage.getItem(reminderSentKey) === dayStamp) return;
+
+    new Notification("Time for Wordle Unbound", {
+      body: "It’s around noon — go do your Wordle!",
+      icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236aaa64'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-size='60' fill='white' font-family='sans-serif' font-weight='bold'>W</text></svg>"
+    });
+
+    localStorage.setItem(reminderSentKey, dayStamp);
+  }
+
+  function msUntilNextNoon() {
+    const now = new Date();
+    const nextNoon = new Date(now);
+    nextNoon.setHours(12, 0, 0, 0);
+    if (now >= nextNoon) nextNoon.setDate(nextNoon.getDate() + 1);
+    return Math.max(0, nextNoon.getTime() - now.getTime());
+  }
+
+  function scheduleDailyNoonReminder() {
+    if (noonReminderTimeout) clearTimeout(noonReminderTimeout);
+    if (noonReminderInterval) clearInterval(noonReminderInterval);
+
+    const now = new Date();
+    if (now.getHours() >= 12) maybeSendDailyReminder();
+
+    noonReminderTimeout = window.setTimeout(() => {
+      maybeSendDailyReminder();
+      noonReminderInterval = window.setInterval(maybeSendDailyReminder, 24 * 60 * 60 * 1000);
+    }, msUntilNextNoon());
   }
 
   // Create a tooltip element appended to document.body and show/hide/position on hover
@@ -1010,10 +1050,6 @@
     if (!leaderboardCard.contains(e.target)) leaderboardModal.classList.add("hidden");
   });
   
-  notifModal.addEventListener("click", (e) => {
-    if (e.target === notifModal) notifModal.classList.add("hidden");
-  });
-
   if (hintButton) hintButton.addEventListener("click", showHint);
 
   document.addEventListener("keydown", (e) => {

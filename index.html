@@ -10,6 +10,20 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <div id="app-loader" class="app-loader" role="status" aria-live="polite" aria-label="Loading Wordle Unbound">
+    <div class="loader-card">
+      <div class="loader-grid" aria-hidden="true">
+        <span class="loader-tile">W</span>
+        <span class="loader-tile">O</span>
+        <span class="loader-tile">R</span>
+        <span class="loader-tile">D</span>
+        <span class="loader-tile">L</span>
+        <span class="loader-tile">E</span>
+      </div>
+      <p class="loader-text">Loading today’s puzzle…</p>
+    </div>
+  </div>
+
   <div class="app-shell">
     <header class="topbar">
       <div class="topbar__left">
@@ -26,13 +40,6 @@
       </div>
 
       <div class="topbar__right">
-        <button id="notif-button" class="icon-button" type="button" aria-label="Notifications">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-          </svg>
-        </button>
-
         <button id="leaderboard-button" class="icon-button" type="button" aria-label="Leaderboards">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
@@ -85,21 +92,6 @@
       <h2 id="end-title" class="modal__title">Nice work.</h2>
       <p id="countdown" class="modal__countdown"></p>
       <button id="close-modal" class="primary-button" type="button">Continue</button>
-    </div>
-  </div>
-
-  <div id="notif-modal" class="modal hidden" role="dialog" aria-modal="true">
-    <div class="modal__card">
-      <button id="close-notif" class="close-top-right">×</button>
-      <h2 class="modal__title">Notifications</h2>
-      <p class="modal__countdown" style="margin-bottom: 1rem;">Get reminded to play!</p>
-      <select id="notif-select" class="text-input" style="margin-bottom: 1rem;">
-        <option value="off">Off</option>
-        <option value="daily">Daily</option>
-        <option value="2days">Every 2 Days</option>
-        <option value="weekly">Weekly</option>
-      </select>
-      <button id="save-notif-btn" class="primary-button">Save Settings</button>
     </div>
   </div>
 
