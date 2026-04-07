@@ -486,10 +486,12 @@ select.text-input {
 #close-leaderboard svg {
   width: 1.03rem;
   height: 1.03rem;
+  display: block;
   stroke: currentColor;
   fill: none;
   stroke-width: 2.6;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 #close-leaderboard:hover {

@@ -646,7 +646,14 @@
       const { data: userRecord, error: fetchError } = await supabase.from('leaderboards').select('*').eq('uuid', userData.uuid).maybeSingle();
       if (fetchError || !userRecord) return;
 
-      const newWinstreak = won ? userRecord.winstreak + 1 : 0;
+      const lastPlayedFromState = userRecord.saved_state?.solutionIndex;
+      const lastPlayedFromColumn = typeof userRecord.last_played_day_index === "number" ? userRecord.last_played_day_index : null;
+      const lastPlayedDay = typeof lastPlayedFromState === "number" ? lastPlayedFromState : lastPlayedFromColumn;
+      const skippedAtLeastOneDay = typeof lastPlayedDay === "number" && (solutionIndex - lastPlayedDay) > 1;
+
+      const currentStreak = skippedAtLeastOneDay ? 0 : (userRecord.winstreak || 0);
+      const newWinstreak = won ? currentStreak + 1 : 0;
+
       const updates = {
         games_played: userRecord.games_played + 1,
         total_guesses: userRecord.total_guesses + scaledGuesses,
