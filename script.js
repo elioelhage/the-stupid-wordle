@@ -89,6 +89,9 @@
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
   const userKey = "wordle-user-data-v2";
+  const pageParams = new URLSearchParams(window.location.search);
+  const raceLoginIntent = pageParams.get("raceLogin") === "1";
+  const raceRoomIntent = (pageParams.get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
 
   let currentRow = 0;
   let currentGuess = "";
@@ -199,6 +202,18 @@
     initializeDailyNotifications();
   scheduleDayRolloverReset();
     hideAppLoader();
+
+    if (raceLoginIntent) {
+      openLeaderboard();
+      usernameView.classList.remove("hidden");
+      statsView.classList.add("hidden");
+      usernameError.textContent = "Login to continue to Race Lobby.";
+      usernameError.classList.remove("hidden");
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("raceLogin");
+      cleanUrl.searchParams.delete("room");
+      window.history.replaceState({}, "", cleanUrl);
+    }
     
     if (gameOver) showEndModal(Boolean(savedState?.won));
   });
@@ -367,10 +382,10 @@
           return;
         }
 
-        showAppLoader("Loading race lobby…");
+        document.body.classList.add("page-transition-out");
         window.setTimeout(() => {
           window.location.href = raceLobbyBtn.getAttribute("href") || "race.html";
-        }, 220);
+        }, 200);
       });
     }
     closeLeaderboardBtn.addEventListener("click", () => leaderboardModal.classList.add("hidden"));
@@ -411,7 +426,7 @@
             userData.username = name;
             localStorage.setItem(userKey, JSON.stringify(userData));
 
-            if (existingUser.saved_state && existingUser.saved_state.solutionIndex === solutionIndex) {
+        if (!raceLoginIntent && existingUser.saved_state && existingUser.saved_state.solutionIndex === solutionIndex) {
                localStorage.setItem(storageKey, JSON.stringify(existingUser.saved_state));
                window.location.reload(); 
                return;
@@ -440,6 +455,15 @@
           if (insertError) throw insertError;
           userData.username = name;
           localStorage.setItem(userKey, JSON.stringify(userData));
+        }
+
+        if (raceLoginIntent) {
+          document.body.classList.add("page-transition-out");
+          const target = raceRoomIntent ? `race.html?room=${encodeURIComponent(raceRoomIntent)}` : "race.html";
+          window.setTimeout(() => {
+            window.location.href = target;
+          }, 200);
+          return;
         }
 
         usernameView.classList.add("hidden");

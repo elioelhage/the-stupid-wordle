@@ -140,6 +140,14 @@
   max-height: min(44vh, 24rem);
   overflow-y: auto;
   padding-right: 0.25rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#race-game .board-wrap::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 #race-game .board {

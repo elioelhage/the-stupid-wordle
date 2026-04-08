@@ -58,9 +58,11 @@
   let raceFinished = false;
   let raceStartTs = 0;
   let raceTimer = null;
+  let raceElapsedMs = 0;
   let currentWordId = null;
   let myHistorySet = new Set();
   let opponentHistorySet = new Set();
+  const wordValidationCache = {};
 
   function hideLoader() {
     if (!appLoader) return;
@@ -73,6 +75,18 @@
 
   function setRaceMessage(text) {
     raceMessageEl.textContent = text;
+  }
+
+  function requestedRoomFromUrl() {
+    return sanitizeRoomCode(new URLSearchParams(window.location.search).get("room"));
+  }
+
+  function redirectToMainForRaceLogin() {
+    const url = new URL("index.html", window.location.href);
+    url.searchParams.set("raceLogin", "1");
+    const room = requestedRoomFromUrl();
+    if (room) url.searchParams.set("room", room);
+    window.location.replace(url.toString());
   }
 
   function getUserData() {
@@ -111,14 +125,12 @@
   async function ensureAuthenticatedUser() {
     currentUser = getUserData();
     if (!currentUser?.uuid || !currentUser?.username) {
-      createRoomBtn.disabled = true;
-      setStatus("Login required. Go back and sign in from leaderboard first.");
+      redirectToMainForRaceLogin();
       return false;
     }
 
     if (!supabase) {
-      createRoomBtn.disabled = true;
-      setStatus("Supabase is not available.");
+      redirectToMainForRaceLogin();
       return false;
     }
 
@@ -129,8 +141,7 @@
       .maybeSingle();
 
     if (error || !data?.uuid) {
-      createRoomBtn.disabled = true;
-      setStatus("Your account is not present in battle_players.");
+      redirectToMainForRaceLogin();
       return false;
     }
 
@@ -247,6 +258,7 @@
 
   function startStopwatch(startAt) {
     raceStartTs = startAt || Date.now();
+  raceElapsedMs = 0;
     raceStopwatchEl.textContent = "00:00.00";
     if (raceTimer) clearInterval(raceTimer);
     raceTimer = setInterval(tickStopwatch, 80);
@@ -257,7 +269,27 @@
       clearInterval(raceTimer);
       raceTimer = null;
     }
+    raceElapsedMs = Math.max(0, Date.now() - raceStartTs);
     tickStopwatch();
+  }
+
+  async function isValidRaceWord(word) {
+    if (!word || word.length !== wordLength) return false;
+    if (wordValidationCache[word] !== undefined) return wordValidationCache[word];
+    if (!/^[A-Z]+$/.test(word)) {
+      wordValidationCache[word] = false;
+      return false;
+    }
+
+    try {
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word.toLowerCase())}`);
+      const ok = response.ok;
+      wordValidationCache[word] = ok;
+      return ok;
+    } catch {
+      wordValidationCache[word] = false;
+      return false;
+    }
   }
 
   function buildRaceKeyboard() {
@@ -351,6 +383,18 @@
 
       raceBoardEl.appendChild(row);
     }
+
+    const wrap = raceBoardEl.closest(".board-wrap");
+    if (wrap) wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  function finishRaceWithPopup({ won, opponentName, opponentMs }) {
+    const winnerLine = won
+      ? `You won in ${formatStopwatch(raceElapsedMs)}.`
+      : `${opponentName || "Opponent"} won${Number.isFinite(opponentMs) ? ` in ${formatStopwatch(opponentMs)}.` : "."}`;
+    const message = `${won ? "You won!" : "You lost."}\n${winnerLine}\nWord: ${currentWord}`;
+    window.alert(message);
+    window.location.href = "index.html";
   }
 
   function enterRaceStage(startAt) {
@@ -462,8 +506,11 @@
         setRaceMessage(`You lost. ${payload.username || "Opponent"} solved first.`);
         setStatus("Race complete.");
         window.setTimeout(() => {
-          window.alert("You lost this race.");
-          exitRoomToLobby();
+          finishRaceWithPopup({
+            won: false,
+            opponentName: payload.username,
+            opponentMs: Number(payload.elapsedMs)
+          });
         }, 150);
       });
 
@@ -568,6 +615,12 @@
     }
 
     const guess = currentGuess.toUpperCase();
+    const validWord = await isValidRaceWord(guess);
+    if (!validWord) {
+      setRaceMessage("That word is not accepted.");
+      return;
+    }
+
     const colors = getTileColors(guess, currentWord);
     const rowIndex = raceRows.length;
     raceRows.push({ guess, colors: [] });
@@ -592,8 +645,9 @@
         await sendRaceEvent("race_finish", {
           uuid: currentUser.uuid,
           username: currentUser.username,
-          elapsedMs: Date.now() - raceStartTs
+          elapsedMs: raceElapsedMs
         });
+        finishRaceWithPopup({ won: true });
       }, colors.length * 180 + 120);
     } else {
       setRaceMessage(`Try #${raceRows.length} — keep going.`);
