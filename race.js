@@ -5,6 +5,8 @@
 
   const createStage = document.getElementById("create-stage");
   const createRoomBtn = document.getElementById("create-room-btn");
+  const joinCodeInput = document.getElementById("join-code-input");
+  const joinCodeBtn = document.getElementById("join-code-btn");
 
   const roomCard = document.getElementById("room-card");
   const roomRoleEl = document.getElementById("room-role");
@@ -24,6 +26,7 @@
   const appLoader = document.getElementById("app-loader");
 
   const userKey = "wordle-user-data-v2";
+  const historyKeyPrefix = "wordle-race-history-";
   const PLAYER_TABLE = "battle_players";
   const WORD_TABLE = "battle_words";
 
@@ -55,6 +58,9 @@
   let raceFinished = false;
   let raceStartTs = 0;
   let raceTimer = null;
+  let currentWordId = null;
+  let myHistorySet = new Set();
+  let opponentHistorySet = new Set();
 
   function hideLoader() {
     if (!appLoader) return;
@@ -76,6 +82,30 @@
     } catch {
       return null;
     }
+  }
+
+  function loadMyHistory() {
+    if (!currentUser?.uuid) return new Set();
+    try {
+      const raw = localStorage.getItem(`${historyKeyPrefix}${currentUser.uuid}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return new Set();
+      return new Set(parsed.map(v => Number(v)).filter(v => Number.isFinite(v) && v > 0));
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveMyHistory() {
+    if (!currentUser?.uuid) return;
+    const arr = Array.from(myHistorySet).sort((a, b) => a - b);
+    localStorage.setItem(`${historyKeyPrefix}${currentUser.uuid}`, JSON.stringify(arr));
+  }
+
+  function markCurrentWordPlayed() {
+    if (!currentWordId) return;
+    myHistorySet.add(currentWordId);
+    saveMyHistory();
   }
 
   async function ensureAuthenticatedUser() {
@@ -105,6 +135,7 @@
     }
 
     createRoomBtn.disabled = false;
+    myHistorySet = loadMyHistory();
     setStatus("Create room or open an invite link.");
     return true;
   }
@@ -174,6 +205,18 @@
     return String(data.word).toUpperCase();
   }
 
+  function chooseWordIdForRoom(roomCode) {
+    const preferred = roomCodeToWordId(roomCode);
+    const blocked = new Set([...myHistorySet, ...opponentHistorySet]);
+
+    for (let offset = 0; offset < 670; offset += 1) {
+      const candidate = ((preferred - 1 + offset) % 670) + 1;
+      if (!blocked.has(candidate)) return candidate;
+    }
+
+    return preferred;
+  }
+
   function fallbackWordForRoom(code) {
     const idx = (roomCodeToWordId(code) - 1) % FALLBACK_WORDS.length;
     return FALLBACK_WORDS[Math.max(0, idx)] || "RACE";
@@ -182,7 +225,8 @@
   async function ensureWordForRoom(code) {
     if (currentWord) return currentWord;
 
-    const remote = await fetchBattleWordById(roomCodeToWordId(code));
+    currentWordId = chooseWordIdForRoom(code);
+    const remote = await fetchBattleWordById(currentWordId);
     const chosen = remote || fallbackWordForRoom(code);
     currentWord = chosen;
     wordLength = chosen.length;
@@ -362,6 +406,8 @@
 
     startBroadcasted = true;
     const startAt = Date.now() + 800;
+    if (!currentWord) await ensureWordForRoom(currentRoom);
+    await sendRaceEvent("word_selected", { word: currentWord, wordId: currentWordId });
     await sendRaceEvent("race_start", { startAt });
     setStatus("Both ready. Starting race...");
   }
@@ -388,6 +434,18 @@
         setStatus(opponentReady ? "Opponent is ready. Waiting for you." : "Opponent is not ready yet.");
         void maybeStartRace();
       })
+      .on("broadcast", { event: "profile" }, ({ payload }) => {
+        if (!payload || payload.uuid === currentUser.uuid) return;
+        const arr = Array.isArray(payload.history) ? payload.history : [];
+        opponentHistorySet = new Set(arr.map(v => Number(v)).filter(v => Number.isFinite(v) && v > 0));
+      })
+      .on("broadcast", { event: "word_selected" }, ({ payload }) => {
+        if (!payload?.word) return;
+        currentWord = String(payload.word).toUpperCase();
+        wordLength = currentWord.length;
+        const idNum = Number(payload.wordId);
+        if (Number.isFinite(idNum) && idNum > 0) currentWordId = idNum;
+      })
       .on("broadcast", { event: "race_start" }, ({ payload }) => {
         const startAt = Number(payload?.startAt) || Date.now();
         setStatus("Race started.");
@@ -400,13 +458,23 @@
 
         raceFinished = true;
         stopStopwatch();
+        markCurrentWordPlayed();
         setRaceMessage(`You lost. ${payload.username || "Opponent"} solved first.`);
         setStatus("Race complete.");
+        window.setTimeout(() => {
+          window.alert("You lost this race.");
+          exitRoomToLobby();
+        }, 150);
       });
 
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         setStatus(role === "host" ? "Room live. Share code and click Ready." : "Connected to room. Click Ready.");
+        void sendRaceEvent("profile", {
+          uuid: currentUser.uuid,
+          username: currentUser.username,
+          history: Array.from(myHistorySet)
+        });
       }
     });
 
@@ -415,6 +483,41 @@
     startBroadcasted = false;
     readyBtn.disabled = false;
     readyBtn.textContent = "Ready";
+  }
+
+  function exitRoomToLobby() {
+    currentRoom = null;
+    currentRole = null;
+    currentWord = null;
+    currentWordId = null;
+    selfReady = false;
+    opponentReady = false;
+    startBroadcasted = false;
+    raceStarted = false;
+    raceFinished = false;
+    raceRows = [];
+    currentGuess = "";
+
+    if (raceTimer) {
+      clearInterval(raceTimer);
+      raceTimer = null;
+    }
+
+    if (channel) {
+      supabase.removeChannel(channel).catch(() => {});
+      channel = null;
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("room");
+    window.history.replaceState({}, "", url);
+
+    raceGameEl.classList.add("hidden");
+    roomCard.classList.add("hidden");
+    createStage.classList.remove("hidden");
+    readyBtn.disabled = false;
+    readyBtn.textContent = "Ready";
+    setStatus("Create room or join with a code.");
   }
 
   async function handleReady() {
@@ -439,6 +542,16 @@
     await setupRoom(code, "host");
   }
 
+  async function joinRoomByCodeInput() {
+    const roomCode = sanitizeRoomCode(joinCodeInput.value);
+    joinCodeInput.value = roomCode;
+    if (roomCode.length !== 6) {
+      setStatus("Enter a valid 6-character room code.");
+      return;
+    }
+    await setupRoom(roomCode, "guest");
+  }
+
   async function joinRoomFromUrl() {
     const roomCode = sanitizeRoomCode(new URLSearchParams(window.location.search).get("room"));
     if (!roomCode) return false;
@@ -456,25 +569,32 @@
 
     const guess = currentGuess.toUpperCase();
     const colors = getTileColors(guess, currentWord);
-    raceRows.push({ guess, colors });
+    const rowIndex = raceRows.length;
+    raceRows.push({ guess, colors: [] });
     currentGuess = "";
-
-    for (let i = 0; i < guess.length; i += 1) {
-      updateKeyboardColor(guess[i], colors[i]);
-    }
-
     renderRaceBoard();
+
+    for (let i = 0; i < colors.length; i += 1) {
+      window.setTimeout(() => {
+        raceRows[rowIndex].colors[i] = colors[i];
+        updateKeyboardColor(guess[i], colors[i]);
+        renderRaceBoard();
+      }, i * 180);
+    }
 
     if (guess === currentWord) {
       raceFinished = true;
-      stopStopwatch();
-      setRaceMessage("You won the race 🏁");
-      setStatus("Race complete.");
-      await sendRaceEvent("race_finish", {
-        uuid: currentUser.uuid,
-        username: currentUser.username,
-        elapsedMs: Date.now() - raceStartTs
-      });
+      window.setTimeout(async () => {
+        stopStopwatch();
+        markCurrentWordPlayed();
+        setRaceMessage("You won the race 🏁");
+        setStatus("Race complete.");
+        await sendRaceEvent("race_finish", {
+          uuid: currentUser.uuid,
+          username: currentUser.username,
+          elapsedMs: Date.now() - raceStartTs
+        });
+      }, colors.length * 180 + 120);
     } else {
       setRaceMessage(`Try #${raceRows.length} — keep going.`);
     }
@@ -502,6 +622,18 @@
 
   createRoomBtn?.addEventListener("click", () => {
     void createRoom();
+  });
+
+  joinCodeBtn?.addEventListener("click", () => {
+    void joinRoomByCodeInput();
+  });
+
+  joinCodeInput?.addEventListener("input", () => {
+    joinCodeInput.value = sanitizeRoomCode(joinCodeInput.value);
+  });
+
+  joinCodeInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") void joinRoomByCodeInput();
   });
 
   copyCodeBtn?.addEventListener("click", async () => {
