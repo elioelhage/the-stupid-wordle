@@ -271,6 +271,7 @@
   }
 
   function setTheme(theme) {
+    document.documentElement.dataset.theme = theme;
     document.body.dataset.theme = theme;
     themeToggle.setAttribute("aria-label", theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
     themeIcon.innerHTML = theme === "dark" ? sunIcon() : moonIcon();

@@ -23,6 +23,8 @@
   --keyboard-height: 15rem;
 }
 
+:root[data-theme="dark"],
+html[data-theme="dark"],
 body[data-theme="dark"] {
   --bg: #121213;
   --surface: #1a1a1b;
