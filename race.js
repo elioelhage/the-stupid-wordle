@@ -1,4 +1,8 @@
 (() => {
+  const supabaseUrl = "https://hcehsxnudbwjydvenlfz.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZWhzeG51ZGJ3anlkdmVubGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NzAsImV4cCI6MjA5MDY1Mjg3MH0.dPawhX90yZrme7nftMTq6A1j-KGqfHZJ8QnbBeFurl8";
+  const supabase = window.supabase?.createClient(supabaseUrl, supabaseKey);
+
   const createRoomBtn = document.getElementById("create-room-btn");
   const joinRoomBtn = document.getElementById("join-room-btn");
   const roomInput = document.getElementById("room-input");
@@ -13,6 +17,160 @@
   const statusEl = document.getElementById("race-status");
 
   const roomKey = "wordle-race-room";
+  const clientKey = "wordle-race-client-id";
+  const ROOM_TABLE = "battle_words";
+  const PLAYER_TABLE = "battle_players";
+
+  const ROOM_CODE_FIELDS = ["room_code", "code", "room", "battle_code"];
+  const ROOM_HOST_FIELDS = ["host_client_id", "host_id", "created_by", "owner_id"];
+  const ROOM_STATUS_FIELDS = ["status", "state"];
+
+  const PLAYER_ROOM_FIELDS = ["room_code", "code", "room", "battle_code"];
+  const PLAYER_ID_FIELDS = ["client_id", "player_id", "uuid", "user_id"];
+  const PLAYER_ROLE_FIELDS = ["role", "player_role", "side"];
+
+  let currentRoom = null;
+  let currentRole = null;
+  let roomPoller = null;
+
+  function getClientId() {
+    let id = localStorage.getItem(clientKey);
+    if (!id) {
+      id = window.crypto?.randomUUID ? window.crypto.randomUUID() : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem(clientKey, id);
+    }
+    return id;
+  }
+
+  function uniquePayloads(payloads) {
+    const seen = new Set();
+    const out = [];
+    for (const payload of payloads) {
+      const key = JSON.stringify(payload);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(payload);
+    }
+    return out;
+  }
+
+  async function tryInsert(table, payloads) {
+    const attempts = uniquePayloads(payloads);
+    let lastError = null;
+    for (const payload of attempts) {
+      const { error } = await supabase.from(table).insert([payload]);
+      if (!error) return { ok: true, payload };
+      lastError = error;
+    }
+    return { ok: false, error: lastError };
+  }
+
+  async function findRoomByCode(code) {
+    for (const field of ROOM_CODE_FIELDS) {
+      const { data, error } = await supabase
+        .from(ROOM_TABLE)
+        .select("*")
+        .eq(field, code)
+        .limit(1)
+        .maybeSingle();
+
+      if (!error) return { room: data, roomCodeField: field };
+    }
+    return { room: null, roomCodeField: ROOM_CODE_FIELDS[0] };
+  }
+
+  async function countPlayersInRoom(code) {
+    for (const field of PLAYER_ROOM_FIELDS) {
+      const { count, error } = await supabase
+        .from(PLAYER_TABLE)
+        .select("*", { count: "exact", head: true })
+        .eq(field, code);
+
+      if (!error) return count ?? 0;
+    }
+    return -1;
+  }
+
+  async function ensureRoomRecord(code) {
+    if (!supabase) return false;
+
+    const found = await findRoomByCode(code);
+    if (found.room) return true;
+
+    const clientId = getClientId();
+    const payloads = [];
+    for (const roomCodeField of ROOM_CODE_FIELDS) {
+      payloads.push({ [roomCodeField]: code });
+      for (const hostField of ROOM_HOST_FIELDS) {
+        payloads.push({ [roomCodeField]: code, [hostField]: clientId });
+        for (const statusField of ROOM_STATUS_FIELDS) {
+          payloads.push({ [roomCodeField]: code, [hostField]: clientId, [statusField]: "waiting" });
+        }
+      }
+      for (const statusField of ROOM_STATUS_FIELDS) {
+        payloads.push({ [roomCodeField]: code, [statusField]: "waiting" });
+      }
+    }
+
+    const result = await tryInsert(ROOM_TABLE, payloads);
+    return result.ok;
+  }
+
+  async function upsertPlayerRecord(code, role) {
+    if (!supabase) return false;
+
+    const clientId = getClientId();
+
+    for (const roomField of PLAYER_ROOM_FIELDS) {
+      for (const idField of PLAYER_ID_FIELDS) {
+        const check = await supabase
+          .from(PLAYER_TABLE)
+          .select("*")
+          .eq(roomField, code)
+          .eq(idField, clientId)
+          .limit(1)
+          .maybeSingle();
+        if (!check.error && check.data) return true;
+      }
+    }
+
+    const payloads = [];
+    for (const roomField of PLAYER_ROOM_FIELDS) {
+      for (const idField of PLAYER_ID_FIELDS) {
+        payloads.push({ [roomField]: code, [idField]: clientId });
+        for (const roleField of PLAYER_ROLE_FIELDS) {
+          payloads.push({ [roomField]: code, [idField]: clientId, [roleField]: role });
+        }
+      }
+    }
+
+    const result = await tryInsert(PLAYER_TABLE, payloads);
+    return result.ok;
+  }
+
+  async function refreshRoomStatus() {
+    if (!currentRoom) return;
+
+    const count = await countPlayersInRoom(currentRoom);
+    if (count < 0) {
+      setStatus("Connected, but table columns didn’t match expected room fields.");
+      return;
+    }
+
+    if (count >= 2) {
+      setStatus("Opponent joined ✅ Room is ready for 1v1.");
+    } else if (currentRole === "host") {
+      setStatus("Room is online. Waiting for opponent to join...");
+    } else {
+      setStatus("You joined. Waiting for host/opponent sync...");
+    }
+  }
+
+  function startRoomPolling() {
+    if (roomPoller) clearInterval(roomPoller);
+    roomPoller = window.setInterval(refreshRoomStatus, 2500);
+    refreshRoomStatus();
+  }
 
   function sanitizeRoomCode(value) {
     return (value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
@@ -75,24 +233,51 @@
     if (role === "host") {
       roomRoleEl.textContent = "You are Host";
       roomHintEl.textContent = "Invite 1 friend using the code or link below.";
-      setStatus("Room created. Waiting for your opponent to join.");
+      setStatus("Creating online room...");
     } else {
       roomRoleEl.textContent = "You are Challenger";
-      roomHintEl.textContent = "You joined this 1v1 room. Multiplayer sync comes next.";
-      setStatus("Joined room. Share this page if needed and get ready.");
+      roomHintEl.textContent = "You joined this 1v1 room.";
+      setStatus("Joining online room...");
     }
+
+    currentRoom = cleanCode;
+    currentRole = role;
 
     localStorage.setItem(roomKey, JSON.stringify({ code: cleanCode, role, updatedAt: Date.now() }));
     const url = new URL(window.location.href);
     url.searchParams.set("room", cleanCode);
     window.history.replaceState({}, "", url);
+
+    connectRoomOnline(cleanCode, role);
   }
 
-  function createRoom() {
-    setRoom(randomRoomCode(), "host");
+  async function connectRoomOnline(code, role) {
+    if (!supabase) {
+      setStatus("Supabase client not loaded on this page.");
+      return;
+    }
+
+    const roomOk = role === "host" ? await ensureRoomRecord(code) : Boolean((await findRoomByCode(code)).room);
+    if (!roomOk) {
+      setStatus(role === "host" ? "Could not create room in DB." : "Room not found online. Check code.");
+      return;
+    }
+
+    const playerOk = await upsertPlayerRecord(code, role);
+    if (!playerOk) {
+      setStatus("Connected to room, but could not register player row.");
+      return;
+    }
+
+    startRoomPolling();
   }
 
-  function joinRoom() {
+  async function createRoom() {
+    const code = randomRoomCode();
+    setRoom(code, "host");
+  }
+
+  async function joinRoom() {
     const cleanCode = sanitizeRoomCode(roomInput.value);
     roomInput.value = cleanCode;
     if (cleanCode.length !== 6) {
@@ -160,6 +345,10 @@
 
     const ok = await copyText(link);
     setStatus(ok ? "Share not available here, so link was copied instead." : "Could not share or copy the link.");
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (roomPoller) clearInterval(roomPoller);
   });
 
   restoreLastRoom();
