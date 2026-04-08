@@ -29,6 +29,16 @@
   const userKey = "wordle-user-data-v2";
   const WORD_TABLE = "battle_words";
   const PLAYER_TABLE = "battle_players";
+  const FALLBACK_WORDS = [
+    "ABLE", "ACID", "AREA", "BAND", "BIRD", "BLUE", "BOAT", "CODE", "COLD", "CROW",
+    "DARK", "DEEP", "DONE", "DRAW", "EARN", "EPIC", "FAIR", "FIRE", "FLOW", "GAME",
+    "GLOW", "GOAL", "GROW", "HARD", "HOLD", "HOME", "IDEA", "JOIN", "JUMP", "KEEP",
+    "KING", "KNOW", "LAND", "LIFE", "LINE", "LOOK", "LOOP", "LUCK", "MAKE", "MOON",
+    "MOVE", "MYTH", "NEAR", "NOTE", "OPEN", "PACE", "PLAY", "RACE", "RING", "ROAD",
+    "ROOM", "RULE", "SAME", "SEEK", "SHIP", "SHOW", "SLOW", "SPIN", "STAR", "STEP",
+    "STOP", "SYNC", "TAKE", "TASK", "TEAM", "TEST", "TIME", "TRUE", "TURN", "TYPE",
+    "WAVE", "WIDE", "WILD", "WIND", "WING", "WORD", "WORK", "YEAR", "ZONE", "ZOOM"
+  ];
 
   let currentUser = null;
   let currentRoom = null;
@@ -142,13 +152,20 @@
     return String(data.word).toUpperCase();
   }
 
+  function fallbackWordForRoom(code) {
+    const idx = (roomCodeToWordId(code) - 1) % FALLBACK_WORDS.length;
+    return FALLBACK_WORDS[Math.max(0, idx)] || "RACE";
+  }
+
   async function ensureWordForRoom(code) {
     if (currentWord) return currentWord;
-    const word = await fetchBattleWordById(roomCodeToWordId(code));
-    if (!word) return null;
-    currentWord = word;
-    wordLength = word.length;
-    return word;
+
+    const remoteWord = await fetchBattleWordById(roomCodeToWordId(code));
+    const finalWord = remoteWord || fallbackWordForRoom(code);
+
+    currentWord = finalWord;
+    wordLength = finalWord.length;
+    return finalWord;
   }
 
   async function copyText(text) {
