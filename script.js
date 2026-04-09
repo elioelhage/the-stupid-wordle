@@ -18,14 +18,11 @@
   const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZWhzeG51ZGJ3anlkdmVubGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NzAsImV4cCI6MjA5MDY1Mjg3MH0.dPawhX90yZrme7nftMTq6A1j-KGqfHZJ8QnbBeFurl8';
   const supabase = window.supabase?.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
 
-  const WORD_SOURCE = "supabase";
+  const WORD_SOURCE = "secure-server";
   const GUESS_SCALE = 10;
-
-  const safeWords = typeof WORDS !== "undefined" ? WORDS : [
-    { word: "CEDAR", category: "Lebanon" },
-    { word: "RUINS", category: "Lebanon" }
-  ];
-  const DAILY_WORDS = safeWords.filter(obj => obj.word && /^[a-zA-Z]+$/.test(obj.word));
+  const MAX_DAILY_GUESSES_CAP = 16;
+  const SESSION_FUNCTION_NAME = "wordle-session";
+  const GUESS_FUNCTION_NAME = "wordle-guess";
 
   const launchDate = Date.UTC(2026, 3, 1);
 
@@ -73,8 +70,6 @@
   const walkthroughAccountBtn = document.getElementById("walkthrough-account");
   const walkthroughActions = walkthroughModal?.querySelector(".walkthrough-actions");
 
-  const wordCache = {};
-
   function getCurrentSolutionIndex() {
     const now = new Date();
     const localDateAsUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
@@ -83,31 +78,20 @@
 
   const daysPassed = getCurrentSolutionIndex();
 
-  if (WORD_SOURCE !== "supabase" && daysPassed >= DAILY_WORDS.length) {
-    boardEl.innerHTML = `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 1rem;">
-        <h2 style="margin: 0 0 0.5rem; color: var(--text);">Out of Words</h2>
-        <p style="margin: 0; color: var(--muted); font-size: 0.95rem;">Check back tomorrow!</p>
-      </div>
-    `;
-    keyboardEl.style.opacity = "0.5";
-    keyboardEl.style.pointerEvents = "none";
-    throw new Error("Word list exhausted.");
-  }
-
   const solutionIndex = daysPassed;
   const reminderSentPrefix = `wordle-reminder-sent-${solutionIndex}`;
-  let solution = "";
-  let wordCategory = "";
+  let secureSessionToken = "";
+  let serverGuessesUsed = 0;
   let wordLength = 0;
-  let maxRows = 0;
-  let maxHints = 2; // Will update after fetch
+  let maxRows = 6;
+  let maxHints = 0;
 
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const endModalSeenKey = `wordle-end-modal-seen-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
   const userKey = "wordle-user-data-v2";
   const walkthroughKey = "wordle-first-walkthrough-v1";
+  const secureSessionSeedKey = "wordle-secure-session-seed-v1";
   const pageParams = new URLSearchParams(window.location.search);
   const raceLoginIntent = pageParams.get("raceLogin") === "1";
   const raceRoomIntent = (pageParams.get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
@@ -203,6 +187,15 @@
 
   function generateUUID() { return crypto.randomUUID(); }
 
+  function getSecureSessionSeed() {
+    let seed = localStorage.getItem(secureSessionSeedKey);
+    if (!seed) {
+      seed = generateUUID();
+      localStorage.setItem(secureSessionSeedKey, seed);
+    }
+    return seed;
+  }
+
   function getUserData() {
     let data = localStorage.getItem(userKey);
     if (!data) {
@@ -214,59 +207,62 @@
     return data;
   }
 
+  function normalizeServerColors(colors) {
+    const map = { green: "correct", yellow: "present", gray: "absent" };
+    return (Array.isArray(colors) ? colors : []).map((c) => map[c] || "absent");
+  }
+
+  async function invokeSecureFunction(functionName, body) {
+    if (!supabase?.functions?.invoke) {
+      throw new Error("Supabase functions client unavailable.");
+    }
+    const { data, error } = await supabase.functions.invoke(functionName, { body });
+    if (error) throw error;
+    return data;
+  }
+
   async function fetchTodaysWord() {
-    if (WORD_SOURCE === "supabase" && supabase) {
-      try {
-        const { data, error } = await supabase.from('words').select('word, category').eq('day_index', solutionIndex).single();
-        if (error) throw error;
-        solution = data.word.toUpperCase();
-        wordCategory = data.category;
-      } catch (err) {
-        console.error("Database query failed:", err);
-        const obj = DAILY_WORDS[solutionIndex % DAILY_WORDS.length];
-        solution = obj.word.toUpperCase();
-        wordCategory = obj.category;
-      }
-    } else {
-      const obj = DAILY_WORDS[solutionIndex];
-      solution = obj.word.toUpperCase();
-      wordCategory = obj.category;
+    const userData = getUserData();
+    const payload = {
+      dayIndex: solutionIndex,
+      userUuid: userData?.uuid || null,
+      username: userData?.username || null,
+      sessionSeed: getSecureSessionSeed()
+    };
+    const data = await invokeSecureFunction(SESSION_FUNCTION_NAME, payload);
+
+    if (!data || !data.sessionToken || !Number.isFinite(data.wordLength)) {
+      throw new Error("Invalid secure session payload.");
     }
 
-    wordLength = solution.length;
-    maxRows = wordLength <= 5 ? 6 : wordLength + 1;
-    maxHints = wordLength >= 7 ? 3 : 2; // Dynamic 3rd hint for 7+ letters
+    secureSessionToken = String(data.sessionToken);
+    wordLength = Math.max(3, Math.min(12, Number(data.wordLength)));
+  maxRows = Math.max(1, Math.min(MAX_DAILY_GUESSES_CAP, Number(data.maxGuesses) || 6));
+    serverGuessesUsed = Math.max(0, Math.min(maxRows, Number(data.guessesUsed) || 0));
+    maxHints = 0;
 
-    const userData = getUserData();
-    if (userData.username) {
-      try {
-        const { data: remoteSync, error: syncErr } = await supabase
-          .from('leaderboards')
-          .select('saved_state')
-          .eq('uuid', userData.uuid)
-          .maybeSingle();
+    const serverBoard = Array.isArray(data.boardState) ? data.boardState : [];
+    if (serverBoard.length) {
+      const normalized = serverBoard
+        .slice(0, maxRows)
+        .map((row) => ({
+          guess: String(row?.guess || "").toUpperCase(),
+          colors: normalizeServerColors(row?.colors)
+        }))
+        .filter((row) => row.guess.length === wordLength && row.colors.length === wordLength);
 
-        if (!syncErr && remoteSync && remoteSync.saved_state) {
-          const dbState = remoteSync.saved_state;
-          const localState = loadState();
-
-          const localIsCurrent = localState && localState.solutionIndex === solutionIndex;
-          const dbIsCurrent = dbState.solutionIndex === solutionIndex;
-
-          if (dbIsCurrent) {
-            if (!localIsCurrent) {
-              localStorage.setItem(storageKey, JSON.stringify(dbState));
-            } else {
-              const localProgress = localState.currentRow + (localState.gameOver ? 1 : 0);
-              const dbProgress = dbState.currentRow + (dbState.gameOver ? 1 : 0);
-              if (dbProgress > localProgress) {
-                localStorage.setItem(storageKey, JSON.stringify(dbState));
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Sync fetch failed:", e);
+      if (normalized.length) {
+        const restored = {
+          solutionIndex,
+          currentRow: Math.min(normalized.length, maxRows - 1),
+          currentGuess: "",
+          gameOver: Boolean(data.gameOver),
+          won: Boolean(data.won),
+          boardState: Array.from({ length: maxRows }, (_, i) => normalized[i] ?? null),
+          hintsUsed: 0,
+          hasSubmittedToLeaderboard: false
+        };
+        localStorage.setItem(storageKey, JSON.stringify(restored));
       }
     }
   }
@@ -278,12 +274,14 @@
 
     const savedState = loadState();
     if (savedState && savedState.solutionIndex === solutionIndex) {
-      currentRow = Math.min(savedState.currentRow ?? 0, maxRows - 1);
-      currentGuess = typeof savedState.currentGuess === "string" ? savedState.currentGuess : "";
-      gameOver = Boolean(savedState.gameOver);
       boardState = Array.from({ length: maxRows }, (_, i) => savedState.boardState?.[i] ?? null);
-      hintsUsed = savedState.hintsUsed || 0;
+      const playedRows = boardState.filter(Boolean).length;
+      currentRow = Math.min(playedRows, maxRows - 1);
+      currentGuess = "";
+      gameOver = Boolean(savedState.gameOver);
+      hintsUsed = 0;
       hasSubmittedToLeaderboard = savedState.hasSubmittedToLeaderboard || false;
+      serverGuessesUsed = Math.max(serverGuessesUsed, playedRows);
     }
 
     setupTheme();
@@ -324,8 +322,7 @@
   function inferWonFromState(state) {
     if (!state?.gameOver) return false;
     if (typeof state.won === "boolean") return state.won;
-    const rows = Array.isArray(state.boardState) ? state.boardState : [];
-    return rows.some((row) => row?.guess === solution);
+    return false;
   }
 
   function clearWalkthroughLengthAnimation() {
@@ -1161,10 +1158,14 @@
   }
 
   function updateHintBadge() {
-    const hintsLeft = maxHints - hintsUsed;
-    hintBadge.textContent = Math.max(0, hintsLeft);
-    if (hintsLeft <= 0) hintBadge.classList.add("empty");
-    else hintBadge.classList.remove("empty");
+    const hintsLeft = 0;
+    hintBadge.textContent = String(hintsLeft);
+    hintBadge.classList.add("empty");
+    if (hintButton) {
+      hintButton.disabled = true;
+      hintButton.setAttribute("aria-label", "Hints unavailable in secure mode");
+      hintButton.title = "Hints unavailable in secure mode";
+    }
   }
 
   function showHintPopup(title, body) {
@@ -1188,92 +1189,7 @@
   }
 
   function showHint() {
-    if (gameOver || isSubmitting) return;
-
-    if (hintsUsed === 0) {
-      // Less-revealing first hint: only indicate whether the word has repeated letters
-      const hasRepeat = (() => {
-        const counts = {};
-        for (const ch of solution) {
-          counts[ch] = (counts[ch] || 0) + 1;
-          if (counts[ch] > 1) return true;
-        }
-        return false;
-      })();
-
-      const body = hasRepeat ? "This word contains repeated letters." : "This word contains no repeated letters.";
-      showHintPopup("Letter Pattern", body);
-      hintsUsed++;
-      updateHintBadge();
-      saveState();
-      return;
-    }
-
-    if (hintsUsed === 1) {
-      const correctLetters = new Set();
-      for (const row of boardState) {
-        if (!row) continue;
-        for (let i = 0; i < wordLength; i++) {
-          if (row.colors[i] === "correct" || row.colors[i] === "present") correctLetters.add(row.guess[i]);
-        }
-      }
-      const unrevealed = solution.split("").filter(l => !correctLetters.has(l));
-
-      if (unrevealed.length > 0) {
-        const randomHintLetter = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-        showHintPopup("Letter hint", `The word contains the letter<br><span style="font-size:36px; color: var(--present);">${randomHintLetter}</span>`);
-        hintsUsed++;
-        updateHintBadge();
-        saveState();
-
-        // Keyboard highlight animation logic
-        setTimeout(() => {
-          const keyEl = document.getElementById(`key-${randomHintLetter}`);
-          if (keyEl) {
-            keyEl.classList.add("hint-highlight-anim");
-            updateKeyboardColor(randomHintLetter, "present");
-            setTimeout(() => keyEl.classList.remove("hint-highlight-anim"), 1000);
-          }
-        }, 400);
-
-      } else {
-        showHintPopup("You're close!", "You've found all the letters —<br>now find their spots!");
-      }
-      return;
-    }
-
-    if (hintsUsed === 2 && maxHints === 3) {
-      // 3rd Hint (Only for 7 letter words): Eliminate 3 unused wrong letters
-      const keyboardKeys = "QWERTYUIOPASDFGHJKLZXCVBNM".split("");
-      const unguessedUnused = keyboardKeys.filter(k => {
-        const keyEl = document.getElementById(`key-${k}`);
-        const isGuessed = keyEl.classList.contains("correct") || keyEl.classList.contains("present") || keyEl.classList.contains("absent");
-        const inSolution = solution.includes(k);
-        return !isGuessed && !inSolution;
-      });
-
-      if (unguessedUnused.length >= 3) {
-        const toEliminate = unguessedUnused.sort(() => 0.5 - Math.random()).slice(0, 3);
-        
-        setTimeout(() => {
-          toEliminate.forEach(k => {
-            updateKeyboardColor(k, "absent");
-            const keyEl = document.getElementById(`key-${k}`);
-            if (keyEl) {
-              keyEl.classList.add("hint-eliminate-anim");
-              setTimeout(() => keyEl.classList.remove("hint-eliminate-anim"), 1000);
-            }
-          });
-        }, 400);
-
-        showHintPopup("Elimination", `Removed 3 incorrect letters<br>from your keyboard.`);
-        hintsUsed++;
-        updateHintBadge();
-        saveState();
-      } else {
-        showHintPopup("No more eliminations", "Not enough unused letters left<br>to eliminate.");
-      }
-    }
+    showHintPopup("Secure mode", "Hints are disabled to keep the daily word server-only.");
   }
 
   function handleKey(key) {
@@ -1332,6 +1248,16 @@
   }
 
   async function submitGuess() {
+    if (!secureSessionToken) {
+      showMessage("Could not validate guess. Refresh to reconnect.");
+      return;
+    }
+
+    if (currentRow >= maxRows || serverGuessesUsed >= maxRows) {
+      showMessage("No guesses left for today.");
+      return;
+    }
+
     if (!currentGuess || currentGuess.length !== wordLength) {
       showMessage(`Need ${wordLength} letters.`);
       shakeCurrentRow();
@@ -1343,23 +1269,46 @@
     messageEl.textContent = "Loading...";
     messageEl.classList.add("show");
 
-    const valid = await isValidWord(guess.toLowerCase());
+    let response;
+    try {
+      response = await invokeSecureFunction(GUESS_FUNCTION_NAME, {
+        dayIndex: solutionIndex,
+        sessionToken: secureSessionToken,
+        guess
+      });
+    } catch (error) {
+      console.error("Secure guess validation failed:", error);
+      messageEl.classList.remove("show");
+      showMessage("Could not validate guess. Try again.");
+      isSubmitting = false;
+      return;
+    }
     messageEl.classList.remove("show");
 
-    if (!valid) {
-      showMessage("That word is not accepted.");
+    if (!response?.ok) {
+      const reason = String(response?.code || "");
+  if (reason === "RATE_LIMIT") showMessage(`Daily limit reached (${Math.min(maxRows, currentRow + 1)}/${maxRows}).`);
+      else if (reason === "INVALID_WORD") showMessage("That word is not accepted.");
+      else showMessage(response?.message || "Guess rejected.");
       shakeCurrentRow();
       isSubmitting = false;
       return;
     }
 
-    const colors = getTileColors(guess, solution);
+    const colors = normalizeServerColors(response.colors);
+    if (colors.length !== wordLength) {
+      showMessage("Invalid response from server.");
+      isSubmitting = false;
+      return;
+    }
+
+    serverGuessesUsed = Math.max(serverGuessesUsed, Number(response.guessesUsed) || (currentRow + 1));
     boardState[currentRow] = { guess, colors };
     saveState();
     animateFlip(currentRow, guess, colors);
 
     window.setTimeout(() => {
-      if (guess === solution) {
+      if (Boolean(response.won)) {
         gameOver = true;
         updateUserStats(true, currentRow + 1, hintsUsed);
         saveState(true);
@@ -1368,11 +1317,12 @@
       } else {
         currentRow += 1;
         currentGuess = "";
-        if (currentRow >= maxRows) {
+        const serverGameOver = Boolean(response.gameOver) || currentRow >= maxRows || serverGuessesUsed >= maxRows;
+        if (serverGameOver) {
           gameOver = true;
           updateUserStats(false, maxRows, hintsUsed);
           saveState(false);
-          showMessage(`The word was ${solution}.`);
+          showMessage("Out of guesses. New word at midnight.");
           showEndModal(false, true);
         } else {
           updateBoard();
@@ -1381,28 +1331,6 @@
       }
       isSubmitting = false;
     }, wordLength * 280 + 420);
-  }
-
-  function getTileColors(guess, answer) {
-    const answerLetters = answer.split("");
-    const guessLetters = guess.split("");
-    const colors = Array(wordLength).fill("absent");
-
-    for (let i = 0; i < wordLength; i += 1) {
-      if (guessLetters[i] === answerLetters[i]) {
-        colors[i] = "correct";
-        answerLetters[i] = null;
-        guessLetters[i] = null;
-      }
-    }
-    for (let i = 0; i < wordLength; i += 1) {
-      const letter = guessLetters[i];
-      if (letter && answerLetters.includes(letter)) {
-        colors[i] = "present";
-        answerLetters[answerLetters.indexOf(letter)] = null;
-      }
-    }
-    return colors;
   }
 
   function animateFlip(rowIndex, guess, colors) {
@@ -1461,29 +1389,12 @@
     }, 1800);
   }
 
-  async function isValidWord(word) {
-    if (word.length !== wordLength) return false;
-    if (DAILY_WORDS.some(w => w.word.toLowerCase() === word)) return true;
-    if (!/^[a-z]+$/.test(word)) return false;
-    if (wordCache[word] !== undefined) return wordCache[word];
-
-    try {
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
-      const result = response.ok;
-      wordCache[word] = result;
-      return result;
-    } catch {
-      wordCache[word] = false;
-      return false;
-    }
-  }
-
   function showEndModal(won, force = false) {
     if (!force && localStorage.getItem(endModalSeenKey) === "1") return;
     if (won) {
-      endTitle.innerHTML = `You got it, the word was <span class="modal-word-highlight">${solution}</span>`;
+      endTitle.innerHTML = "You solved today's WordShift.";
     } else {
-      endTitle.innerHTML = `The word was <span class="modal-word-highlight">${solution}</span>`;
+      endTitle.innerHTML = "Round complete. Try again tomorrow.";
     }
     localStorage.setItem(endModalSeenKey, "1");
     modal.classList.remove("hidden");

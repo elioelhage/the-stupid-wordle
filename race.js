@@ -92,6 +92,7 @@
   let lastOpponentSeenTs = 0;
   let opponentLeftHandled = false;
   let raceDrawSent = false;
+  let readyBlockedTimer = null;
   let leaveResolver = null;
   let lastBackPressTs = 0;
   const wordValidationCache = {};
@@ -278,6 +279,37 @@
   function markOpponentSeen() {
     opponentPresent = true;
     lastOpponentSeenTs = Date.now();
+    if (readyBlockedTimer) {
+      clearTimeout(readyBlockedTimer);
+      readyBlockedTimer = null;
+    }
+    readyBtn.classList.remove("is-blocked");
+    if (!raceStarted && !startBroadcasted && !selfReady) {
+      readyBtn.disabled = false;
+      readyBtn.textContent = "Ready";
+    }
+  }
+
+  function showCannotReadyInEmptyRoomState() {
+    if (readyBlockedTimer) {
+      clearTimeout(readyBlockedTimer);
+      readyBlockedTimer = null;
+    }
+    readyBtn.disabled = true;
+    readyBtn.classList.remove("is-ready");
+    readyBtn.classList.add("is-blocked");
+    readyBtn.textContent = "Cannot Ready: Empty Room";
+
+    readyBlockedTimer = setTimeout(() => {
+      readyBlockedTimer = null;
+      if (!currentRoom || raceStarted || startBroadcasted || selfReady || opponentPresent) {
+        readyBtn.classList.remove("is-blocked");
+        return;
+      }
+      readyBtn.disabled = false;
+      readyBtn.classList.remove("is-blocked");
+      readyBtn.textContent = "Ready";
+    }, 1400);
   }
 
   function stopRoomIdleWatchdog() {
@@ -1011,7 +1043,6 @@
           uuid: currentUser.uuid,
           username: currentUser.username
         });
-        markOpponentSeen();
         startProfileHeartbeat();
         startOpponentWatchdog();
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
@@ -1032,7 +1063,11 @@
     startBroadcasted = false;
     readyBtn.disabled = false;
     readyBtn.textContent = "Ready";
-    readyBtn.classList.remove("is-ready");
+    readyBtn.classList.remove("is-ready", "is-blocked");
+    if (readyBlockedTimer) {
+      clearTimeout(readyBlockedTimer);
+      readyBlockedTimer = null;
+    }
     startRoomIdleWatchdog();
     updatePresenceUI();
   }
@@ -1079,6 +1114,11 @@
     createStage.classList.remove("hidden");
     readyBtn.disabled = false;
     readyBtn.textContent = "Ready";
+    readyBtn.classList.remove("is-ready", "is-blocked");
+    if (readyBlockedTimer) {
+      clearTimeout(readyBlockedTimer);
+      readyBlockedTimer = null;
+    }
     setStatus("Create room or join with a code.", "info");
     setOpponentPressure("");
   }
@@ -1086,8 +1126,17 @@
   async function handleReady() {
     if (!currentRoom || raceStarted || startBroadcasted) return;
 
+    if (!opponentPresent) {
+      selfReady = false;
+      updatePresenceUI();
+      showCannotReadyInEmptyRoomState();
+      setStatus("Cannot ready in an empty room. Waiting for opponent to join.", "warn");
+      return;
+    }
+
     selfReady = !selfReady;
     readyBtn.disabled = false;
+    readyBtn.classList.remove("is-blocked");
     readyBtn.textContent = selfReady ? "Ready ✓" : "Ready";
     readyBtn.classList.toggle("is-ready", selfReady);
     updatePresenceUI();

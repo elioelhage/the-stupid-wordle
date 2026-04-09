@@ -1,0 +1,185 @@
+// @ts-nocheck
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS"
+};
+
+function getMaxGuesses(wordLength: number) {
+  return wordLength <= 5 ? 6 : Math.min(16, wordLength + 1);
+}
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json"
+    }
+  });
+}
+
+function computeColors(guess: string, answer: string): string[] {
+  const answerLetters = answer.split("");
+  const guessLetters = guess.split("");
+  const colors = Array(guess.length).fill("gray");
+
+  for (let i = 0; i < guess.length; i += 1) {
+    if (guessLetters[i] === answerLetters[i]) {
+      colors[i] = "green";
+      answerLetters[i] = "\0";
+      guessLetters[i] = "\0";
+    }
+  }
+
+  for (let i = 0; i < guess.length; i += 1) {
+    const letter = guessLetters[i];
+    if (letter !== "\0" && answerLetters.includes(letter)) {
+      colors[i] = "yellow";
+      answerLetters[answerLetters.indexOf(letter)] = "\0";
+    }
+  }
+
+  return colors;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return json({ ok: false, code: "METHOD_NOT_ALLOWED" }, 405);
+  }
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const dayIndex = Number(body?.dayIndex);
+    const sessionToken = String(body?.sessionToken || "").trim();
+    const guess = String(body?.guess || "").toUpperCase().trim();
+
+    if (!Number.isFinite(dayIndex) || dayIndex < 0 || !sessionToken) {
+      return json({ ok: false, code: "BAD_REQUEST" }, 400);
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRole) {
+      return json({ ok: false, code: "SERVER_CONFIG_ERROR" }, 500);
+    }
+
+    const admin = createClient(supabaseUrl, serviceRole, {
+      auth: { persistSession: false }
+    });
+
+    const { data: session, error: sessionErr } = await admin
+      .from("wordle_daily_sessions")
+      .select("id, guess_count, request_count, guesses, game_over, won")
+      .eq("day_index", dayIndex)
+      .eq("session_token", sessionToken)
+      .maybeSingle();
+
+    if (sessionErr || !session) {
+      return json({ ok: false, code: "SESSION_NOT_FOUND" }, 404);
+    }
+
+    const { data: wordRow, error: wordErr } = await admin
+      .from("words")
+      .select("word")
+      .eq("day_index", dayIndex)
+      .single();
+
+    if (wordErr || !wordRow?.word) {
+      return json({ ok: false, code: "WORD_NOT_FOUND" }, 404);
+    }
+
+    const answer = String(wordRow.word).toUpperCase().trim();
+    const maxGuesses = getMaxGuesses(answer.length);
+    const currentRequests = Number(session.request_count) || 0;
+    if (currentRequests >= maxGuesses) {
+      return json({ ok: false, code: "RATE_LIMIT", message: `Daily request limit reached (${maxGuesses}/${maxGuesses}).` }, 429);
+    }
+
+    const requestCount = currentRequests + 1;
+
+    await admin
+      .from("wordle_daily_sessions")
+      .update({ request_count: requestCount, updated_at: new Date().toISOString() })
+      .eq("id", session.id);
+
+    if (session.game_over) {
+      return json({ ok: false, code: "RATE_LIMIT", message: "Game already finished for today." }, 429);
+    }
+
+    if (!/^[A-Z]+$/.test(guess) || guess.length !== answer.length) {
+      const gameOverFromRequests = requestCount >= maxGuesses;
+      if (gameOverFromRequests) {
+        await admin
+          .from("wordle_daily_sessions")
+          .update({ game_over: true, updated_at: new Date().toISOString() })
+          .eq("id", session.id);
+      }
+      return json({ ok: false, code: "INVALID_WORD", message: "Guess format is invalid for today\u2019s word length." }, 400);
+    }
+
+    // Optional dictionary check (if table exists).
+    const dictLookup = await admin
+      .from("word_dictionary")
+      .select("word")
+      .eq("word", guess.toLowerCase())
+      .maybeSingle();
+
+    if (!dictLookup.error && !dictLookup.data) {
+      const gameOverFromRequests = requestCount >= maxGuesses;
+      if (gameOverFromRequests) {
+        await admin
+          .from("wordle_daily_sessions")
+          .update({ game_over: true, updated_at: new Date().toISOString() })
+          .eq("id", session.id);
+      }
+      return json({ ok: false, code: "INVALID_WORD", message: "That word is not accepted." }, 400);
+    }
+
+    const colors = computeColors(guess, answer);
+    const won = colors.every((c) => c === "green");
+    const previousGuesses = Array.isArray(session.guesses) ? session.guesses : [];
+    const guessCount = (Number(session.guess_count) || 0) + 1;
+  const gameOver = won || guessCount >= maxGuesses || requestCount >= maxGuesses;
+
+    const nextGuesses = [
+      ...previousGuesses,
+      { guess, colors }
+    ];
+
+    const { error: updateErr } = await admin
+      .from("wordle_daily_sessions")
+      .update({
+        guess_count: guessCount,
+        guesses: nextGuesses,
+        game_over: gameOver,
+        won,
+        updated_at: new Date().toISOString(),
+        last_guess_at: new Date().toISOString()
+      })
+      .eq("id", session.id);
+
+    if (updateErr) {
+      return json({ ok: false, code: "SESSION_UPDATE_FAILED", message: updateErr.message }, 500);
+    }
+
+    return json({
+      ok: true,
+      colors,
+      guessesUsed: guessCount,
+      requestCount,
+      gameOver,
+      won
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    return json({ ok: false, code: "INTERNAL_ERROR", message }, 500);
+  }
+});

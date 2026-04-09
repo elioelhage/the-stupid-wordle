@@ -164,6 +164,18 @@
   box-shadow: 0 10px 22px rgba(47, 122, 64, 0.34);
 }
 
+#ready-btn.is-blocked {
+  background: linear-gradient(140deg, #7a808a, #666d79);
+  color: #edf0f4;
+  border-color: #5b616d;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+#ready-btn.is-blocked:disabled {
+  opacity: 1;
+}
+
 #ready-btn:disabled {
   opacity: 0.92;
 }
