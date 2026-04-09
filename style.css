@@ -477,6 +477,114 @@ a.icon-button {
 
 .text-input { width: 100%; padding: 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 1rem; margin-top: 1rem; font-family: inherit; }
 
+.walkthrough-card {
+  width: min(94vw, 33rem);
+  text-align: left;
+  background:
+    radial-gradient(120% 95% at 0% 0%, color-mix(in srgb, var(--correct) 12%, transparent), transparent 60%),
+    linear-gradient(165deg, color-mix(in srgb, var(--bg) 90%, var(--surface) 10%), var(--surface));
+}
+
+.walkthrough-demo {
+  margin: 0.65rem 0 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  padding: 0.7rem;
+}
+
+.walkthrough-row {
+  display: flex;
+  gap: 0.34rem;
+  justify-content: center;
+}
+
+.walkthrough-tile {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1rem;
+  background: var(--tile-empty);
+  color: var(--text);
+}
+
+.walkthrough-demo.show-colors .walkthrough-tile:nth-child(1),
+.walkthrough-demo.show-colors .walkthrough-tile:nth-child(4) {
+  background: var(--correct);
+  border-color: var(--correct);
+  color: #fff;
+}
+
+.walkthrough-demo.show-colors .walkthrough-tile:nth-child(2) {
+  background: var(--present);
+  border-color: var(--present);
+  color: #fff;
+}
+
+.walkthrough-demo.show-colors .walkthrough-tile {
+  animation: walkthroughFlip 520ms ease;
+}
+
+.walkthrough-legend {
+  display: grid;
+  gap: 0.36rem;
+  margin-top: 0.68rem;
+}
+
+.walkthrough-badge {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.77rem;
+  font-weight: 760;
+  padding: 0.22rem 0.52rem;
+  display: inline-flex;
+  width: fit-content;
+}
+
+.walkthrough-badge.correct {
+  background: color-mix(in srgb, var(--correct) 18%, transparent);
+  border-color: color-mix(in srgb, var(--correct) 46%, var(--border));
+}
+
+.walkthrough-badge.present {
+  background: color-mix(in srgb, var(--present) 18%, transparent);
+  border-color: color-mix(in srgb, var(--present) 44%, var(--border));
+}
+
+.walkthrough-progress {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.82rem;
+  margin-bottom: 0.62rem;
+}
+
+.walkthrough-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.walkthrough-skip,
+.walkthrough-prev {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.walkthrough-card.pulse-account {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--correct) 20%, transparent), var(--shadow);
+}
+
+@keyframes walkthroughFlip {
+  0% { transform: rotateX(0); }
+  45% { transform: rotateX(90deg); }
+  100% { transform: rotateX(0); }
+}
+
 select.text-input {
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");

@@ -228,11 +228,16 @@
 
     .item.rank-2 {
       background:
-        radial-gradient(120% 100% at 0% 0%, rgba(255, 255, 255, 0.55), transparent 58%),
-        linear-gradient(140deg, #f2f3f5 0%, #d7d8dc 52%, #babcc2 100%);
-      border: 1px solid #acafb6;
+        radial-gradient(120% 100% at 0% 0%, rgba(255, 255, 255, 0.78), transparent 58%),
+        linear-gradient(140deg, #f9fafb 0%, #e1e4ea 52%, #c4cad4 100%);
+      border: 1px solid #9fa9b8;
       color: #1f2024;
-      box-shadow: 0 12px 24px rgba(163, 166, 174, 0.28);
+      box-shadow: 0 12px 24px rgba(125, 134, 151, 0.34);
+    }
+
+    :root:not([data-theme="dark"]) .item.rank-2 {
+      outline: 2px solid rgba(148, 163, 184, 0.34);
+      outline-offset: -1px;
     }
 
     .item.rank-3 {

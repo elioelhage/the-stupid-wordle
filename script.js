@@ -58,6 +58,15 @@
   const tabBtns = document.querySelectorAll(".tab-btn");
   const lbLoading = document.getElementById("lb-loading");
   const lbList = document.getElementById("lb-list");
+  const walkthroughModal = document.getElementById("walkthrough-modal");
+  const walkthroughCard = walkthroughModal?.querySelector(".walkthrough-card");
+  const walkthroughTitle = document.getElementById("walkthrough-title");
+  const walkthroughText = document.getElementById("walkthrough-text");
+  const walkthroughDemo = document.getElementById("walkthrough-demo");
+  const walkthroughStepIndicator = document.getElementById("walkthrough-step-indicator");
+  const walkthroughSkipBtn = document.getElementById("walkthrough-skip");
+  const walkthroughPrevBtn = document.getElementById("walkthrough-prev");
+  const walkthroughNextBtn = document.getElementById("walkthrough-next");
 
   const wordCache = {};
 
@@ -92,6 +101,7 @@
   const storageKey = `wordle-mobile-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
   const userKey = "wordle-user-data-v2";
+  const walkthroughKey = "wordle-first-walkthrough-v1";
   const pageParams = new URLSearchParams(window.location.search);
   const raceLoginIntent = pageParams.get("raceLogin") === "1";
   const raceRoomIntent = (pageParams.get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
@@ -109,6 +119,40 @@
   let noonReminderInterval = null;
   let dayRolloverTimeout = null;
   let hasTriggeredDayReset = false;
+  let walkthroughStep = 0;
+
+  const walkthroughSteps = [
+    {
+      title: "Welcome to Wordle Unbound",
+      body: "Guess the hidden daily word by typing letters and submitting with ENTER. Every day has a fresh word.",
+      colors: false,
+      pulse: false
+    },
+    {
+      title: "Green and yellow feedback",
+      body: "Green means correct letter in the exact spot. Yellow means correct letter but wrong position.",
+      colors: true,
+      pulse: false
+    },
+    {
+      title: "Word length changes by day",
+      body: "Some days are short, some are longer. The board and allowed tries automatically adjust to today’s word length.",
+      colors: false,
+      pulse: false
+    },
+    {
+      title: "Hints can save a run",
+      body: "Use hints when stuck. They can reveal patterns, letters, or eliminate options depending on word length.",
+      colors: false,
+      pulse: false
+    },
+    {
+      title: "Create an account for the full experience",
+      body: "Accounts unlock synced progress, race mode, and leaderboard placement — this is where the real competition happens.",
+      colors: false,
+      pulse: true
+    }
+  ];
 
   function generateUUID() { return crypto.randomUUID(); }
 
@@ -217,7 +261,45 @@
     }
     
     if (gameOver) showEndModal(Boolean(savedState?.won));
+
+    maybeShowFirstTimeWalkthrough();
   });
+
+  function setWalkthroughSeen() {
+    localStorage.setItem(walkthroughKey, "1");
+  }
+
+  function closeWalkthrough(markSeen = true) {
+    if (markSeen) setWalkthroughSeen();
+    walkthroughModal?.classList.add("hidden");
+  }
+
+  function renderWalkthroughStep() {
+    if (!walkthroughModal) return;
+    const step = walkthroughSteps[walkthroughStep] || walkthroughSteps[0];
+    walkthroughTitle.textContent = step.title;
+    walkthroughText.textContent = step.body;
+    walkthroughStepIndicator.textContent = `${walkthroughStep + 1} / ${walkthroughSteps.length}`;
+    walkthroughDemo.classList.toggle("show-colors", Boolean(step.colors));
+    walkthroughCard?.classList.toggle("pulse-account", Boolean(step.pulse));
+    walkthroughPrevBtn.disabled = walkthroughStep === 0;
+    walkthroughNextBtn.textContent = walkthroughStep === walkthroughSteps.length - 1 ? "Start playing" : "Next";
+  }
+
+  function openWalkthrough() {
+    walkthroughStep = 0;
+    renderWalkthroughStep();
+    walkthroughModal?.classList.remove("hidden");
+  }
+
+  function maybeShowFirstTimeWalkthrough() {
+    const userData = getUserData();
+    const seen = localStorage.getItem(walkthroughKey) === "1";
+    if (seen) return;
+    if (userData?.username) return;
+    if (raceLoginIntent) return;
+    window.setTimeout(() => openWalkthrough(), 260);
+  }
 
   function hideAppLoader() {
     if (!appLoader) return;
@@ -423,6 +505,23 @@
     closeLeaderboardBtn.addEventListener("click", () => {
       leaderboardModal.classList.add("hidden");
       usernameError.classList.add("hidden");
+    });
+
+    walkthroughSkipBtn?.addEventListener("click", () => closeWalkthrough(true));
+    walkthroughPrevBtn?.addEventListener("click", () => {
+      walkthroughStep = Math.max(0, walkthroughStep - 1);
+      renderWalkthroughStep();
+    });
+    walkthroughNextBtn?.addEventListener("click", () => {
+      if (walkthroughStep >= walkthroughSteps.length - 1) {
+        closeWalkthrough(true);
+        return;
+      }
+      walkthroughStep += 1;
+      renderWalkthroughStep();
+    });
+    walkthroughModal?.addEventListener("click", (e) => {
+      if (e.target === walkthroughModal) closeWalkthrough(true);
     });
 
     saveUsernameBtn.addEventListener("click", async () => {
