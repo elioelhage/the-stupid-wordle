@@ -94,7 +94,7 @@
   }
 
   const solutionIndex = daysPassed;
-  const reminderSentKey = `wordle-reminder-sent-${solutionIndex}`;
+  const reminderSentPrefix = `wordle-reminder-sent-${solutionIndex}`;
   let solution = "";
   let wordCategory = "";
   let wordLength = 0;
@@ -102,6 +102,7 @@
   let maxHints = 2; // Will update after fetch
 
   const storageKey = `wordle-mobile-${solutionIndex}`;
+  const endModalSeenKey = `wordle-end-modal-seen-${solutionIndex}`;
   const themeKey = "wordle-mobile-theme";
   const userKey = "wordle-user-data-v2";
   const walkthroughKey = "wordle-first-walkthrough-v1";
@@ -126,6 +127,8 @@
   let hasSubmittedToLeaderboard = false;
   let noonReminderTimeout = null;
   let noonReminderInterval = null;
+  let afternoonReminderTimeout = null;
+  let afternoonReminderInterval = null;
   let dayRolloverTimeout = null;
   let hasTriggeredDayReset = false;
   let loaderFailsafeTimer = null;
@@ -180,6 +183,12 @@
       title: "Hints can save a run",
       body: "Use hints when stuck. They can reveal patterns, letters, or eliminate options depending on word length.",
       demo: "hint",
+      pulse: false
+    },
+    {
+      title: "Turn on reminders",
+      body: "Enable notifications to get a ping at 12:00 PM, and again at 4:00 PM if you still haven’t solved today’s word.",
+      demo: "notify",
       pulse: false
     },
     {
@@ -393,6 +402,28 @@
         </div>
         <div class="walkthrough-legend">
           <span class="walkthrough-badge neutral">Tap the lightbulb button for help when you’re stuck.</span>
+        </div>
+      `;
+      return;
+    }
+
+    if (step.demo === "notify") {
+      const permission = ("Notification" in window) ? Notification.permission : "unsupported";
+      const statusText = permission === "granted"
+        ? "Notifications are enabled. You’re set."
+        : permission === "denied"
+          ? "Notifications are blocked in this browser."
+          : permission === "unsupported"
+            ? "This browser doesn’t support notifications."
+            : "Enable notifications to get reminder pings.";
+
+      const canEnable = permission === "default";
+      walkthroughDemo.innerHTML = `
+        <div class="walkthrough-notify-showcase">
+          <button id="walkthrough-enable-notifications" class="primary-button walkthrough-notify-btn" type="button" ${canEnable ? "" : "disabled"}>${canEnable ? "Allow notifications" : "Notifications status"}</button>
+        </div>
+        <div class="walkthrough-legend">
+          <span class="walkthrough-badge neutral">${statusText}</span>
         </div>
       `;
       return;
@@ -695,6 +726,17 @@
       closeWalkthrough(true);
       openAuthModal("Create an account for the full Wordle Unbound experience.");
     });
+    walkthroughDemo?.addEventListener("click", async (e) => {
+      const target = e.target.closest("#walkthrough-enable-notifications");
+      if (!target) return;
+      const permission = await requestNotificationPermissionFromUI();
+      if (permission === "granted") {
+        showMessage("Notifications enabled.");
+      } else if (permission === "denied") {
+        showMessage("Notifications blocked in browser settings.");
+      }
+      renderWalkthroughStep();
+    });
     walkthroughModal?.addEventListener("click", (e) => {
       if (e.target === walkthroughModal) closeWalkthrough(true);
     });
@@ -803,18 +845,24 @@
     // - granted => don't ask again, just schedule reminders
     // - denied => don't ask again
     if (Notification.permission === "granted") {
-      scheduleDailyNoonReminder();
+      scheduleDailyReminders();
       return;
     }
+  }
 
-    if (Notification.permission === "default") {
-      Notification.requestPermission()
-        .then((permission) => {
-          if (permission === "granted") {
-            scheduleDailyNoonReminder();
-          }
-        })
-        .catch(() => {});
+  async function requestNotificationPermissionFromUI() {
+    if (!("Notification" in window)) return "unsupported";
+    if (Notification.permission === "granted") {
+      scheduleDailyReminders();
+      return "granted";
+    }
+    if (Notification.permission === "denied") return "denied";
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") scheduleDailyReminders();
+      return permission;
+    } catch {
+      return "default";
     }
   }
 
@@ -828,40 +876,58 @@
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   }
 
-  function maybeSendDailyReminder() {
+  function reminderSentKeyFor(slot) {
+    return `${reminderSentPrefix}-${slot}`;
+  }
+
+  function maybeSendDailyReminder(slot) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
     if (isTodaysWordDone()) return;
 
     const dayStamp = currentDayStamp();
-    if (localStorage.getItem(reminderSentKey) === dayStamp) return;
+    const reminderKey = reminderSentKeyFor(slot);
+    if (localStorage.getItem(reminderKey) === dayStamp) return;
 
-    new Notification("Time for Wordle Unbound", {
-      body: "It’s around noon — go do your Wordle!",
+    const title = "Time for Wordle Unbound";
+    const body = slot === "noon"
+      ? "It’s noon — your daily word is waiting."
+      : "4 PM check-in: still time to finish today’s word.";
+
+    new Notification(title, {
+      body,
       icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236aaa64'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-size='60' fill='white' font-family='sans-serif' font-weight='bold'>W</text></svg>"
     });
 
-    localStorage.setItem(reminderSentKey, dayStamp);
+    localStorage.setItem(reminderKey, dayStamp);
   }
 
-  function msUntilNextNoon() {
+  function msUntilNextHour(targetHour) {
     const now = new Date();
-    const nextNoon = new Date(now);
-    nextNoon.setHours(12, 0, 0, 0);
-    if (now >= nextNoon) nextNoon.setDate(nextNoon.getDate() + 1);
-    return Math.max(0, nextNoon.getTime() - now.getTime());
+    const next = new Date(now);
+    next.setHours(targetHour, 0, 0, 0);
+    if (now >= next) next.setDate(next.getDate() + 1);
+    return Math.max(0, next.getTime() - now.getTime());
   }
 
-  function scheduleDailyNoonReminder() {
+  function scheduleDailyReminders() {
     if (noonReminderTimeout) clearTimeout(noonReminderTimeout);
     if (noonReminderInterval) clearInterval(noonReminderInterval);
+    if (afternoonReminderTimeout) clearTimeout(afternoonReminderTimeout);
+    if (afternoonReminderInterval) clearInterval(afternoonReminderInterval);
 
     const now = new Date();
-    if (now.getHours() >= 12) maybeSendDailyReminder();
+    if (now.getHours() >= 12) maybeSendDailyReminder("noon");
+    if (now.getHours() >= 16) maybeSendDailyReminder("afternoon");
 
     noonReminderTimeout = window.setTimeout(() => {
-      maybeSendDailyReminder();
-      noonReminderInterval = window.setInterval(maybeSendDailyReminder, 24 * 60 * 60 * 1000);
-    }, msUntilNextNoon());
+      maybeSendDailyReminder("noon");
+      noonReminderInterval = window.setInterval(() => maybeSendDailyReminder("noon"), 24 * 60 * 60 * 1000);
+    }, msUntilNextHour(12));
+
+    afternoonReminderTimeout = window.setTimeout(() => {
+      maybeSendDailyReminder("afternoon");
+      afternoonReminderInterval = window.setInterval(() => maybeSendDailyReminder("afternoon"), 24 * 60 * 60 * 1000);
+    }, msUntilNextHour(16));
   }
 
   // Create a tooltip element appended to document.body and show/hide/position on hover
@@ -1282,7 +1348,7 @@
         updateUserStats(true, currentRow + 1, hintsUsed);
         saveState(true);
         showMessage("Solved.");
-        showEndModal(true);
+  showEndModal(true, true);
       } else {
         currentRow += 1;
         currentGuess = "";
@@ -1291,7 +1357,7 @@
           updateUserStats(false, maxRows, hintsUsed);
           saveState(false);
           showMessage(`The word was ${solution}.`);
-          showEndModal(false);
+          showEndModal(false, true);
         } else {
           updateBoard();
           saveState();
@@ -1396,12 +1462,14 @@
     }
   }
 
-  function showEndModal(won) {
+  function showEndModal(won, force = false) {
+    if (!force && localStorage.getItem(endModalSeenKey) === "1") return;
     if (won) {
       endTitle.innerHTML = `You got it, the word was <span class="modal-word-highlight">${solution}</span>`;
     } else {
       endTitle.innerHTML = `The word was <span class="modal-word-highlight">${solution}</span>`;
     }
+    localStorage.setItem(endModalSeenKey, "1");
     modal.classList.remove("hidden");
     startCountdown();
   }

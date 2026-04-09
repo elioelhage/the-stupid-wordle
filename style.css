@@ -619,6 +619,24 @@ a.icon-button {
   pointer-events: none;
 }
 
+.walkthrough-notify-showcase {
+  display: grid;
+  place-items: center;
+}
+
+.walkthrough-notify-btn {
+  width: auto;
+  min-width: min(88vw, 14rem);
+  padding-inline: 1rem;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--correct) 74%, #fff 26%), var(--correct));
+  color: #fff;
+}
+
+.walkthrough-notify-btn:disabled {
+  opacity: 0.78;
+  cursor: default;
+}
+
 .hint-button.walkthrough-hint-focus {
   border-color: var(--correct);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--correct) 26%, transparent), var(--shadow);
