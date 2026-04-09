@@ -361,7 +361,18 @@
 
   function bindEvents() {
     const logoutBtn = document.getElementById("leaderboard-logout-button");
-    if (logoutBtn) logoutBtn.addEventListener("click", logoutLeaderboardAccount);
+    if (logoutBtn) {
+      let logoutTriggered = false;
+      const triggerLogout = (e) => {
+        e.preventDefault();
+        if (logoutTriggered) return;
+        logoutTriggered = true;
+        logoutLeaderboardAccount();
+        window.setTimeout(() => { logoutTriggered = false; }, 260);
+      };
+      logoutBtn.addEventListener("pointerup", triggerLogout);
+      logoutBtn.addEventListener("click", triggerLogout);
+    }
     closeModal.addEventListener("click", hideEndModal);
 
     // Initialize global tooltip portal (so tooltips are not clipped by modal/tab overflow)
@@ -640,7 +651,7 @@
     } else {
       usernameView.classList.add("hidden");
       statsView.classList.remove("hidden");
-      tabBtns[0].click();
+      loadLeaderboardData("avg");
     }
   }
 
@@ -658,6 +669,7 @@
   }
 
   async function loadLeaderboardData(type) {
+    const requestedType = type === "avg" ? "avg" : "avg";
     lbLoading.classList.remove("hidden");
     lbLoading.textContent = "Loading...";
     lbList.classList.add("hidden");
@@ -665,7 +677,7 @@
 
     try {
       let data = [];
-      if (type === "avg") {
+      if (requestedType === "avg") {
         const { data: res, error } = await supabase.from('leaderboards')
           .select('username, games_played, total_guesses, total_hints, last_hint_day_index')
           .order('games_played', { ascending: false });
@@ -676,12 +688,6 @@
             avg: ((p.total_guesses / GUESS_SCALE) / p.games_played).toFixed(2)
           })).sort((a, b) => a.avg - b.avg).slice(0, 50);
         }
-      } else if (type === "streak") {
-        const { data: res, error } = await supabase.from('leaderboards')
-          .select('username, winstreak, max_winstreak, total_hints, last_hint_day_index')
-          .order('max_winstreak', { ascending: false }).limit(50);
-        if (error) throw error;
-        if (res) data = res;
       }
 
       lbLoading.classList.add("hidden");
@@ -706,7 +712,7 @@
         else if (index === 2) li.classList.add("rank-3");
 
         let medal = index === 0 ? medal1 : index === 1 ? medal2 : index === 2 ? medal3 : "";
-        const scoreVal = type === "avg" ? player.avg : (player.max_winstreak ?? player.winstreak ?? 0);
+  const scoreVal = player.avg;
         
         let hintBadge = "";
         if (player.last_hint_day_index === solutionIndex) {
@@ -720,7 +726,14 @@
         let displayName = player.username + hintBadge;
         if (player.username === currentUser) displayName += " <i style='opacity: 0.6; font-weight: normal; font-size: 0.85em;'>(Me)</i>";
 
-        li.innerHTML = `<div><span class="rank">#${index + 1}</span> ${medal}${displayName}</div><div class="score">${scoreVal}</div>`;
+        li.innerHTML = `
+          <div class="lb-left">
+            <span class="rank">#${index + 1}</span>
+            ${medal}
+            <span class="lb-name">${displayName}</span>
+          </div>
+          <div class="lb-score">${scoreVal}</div>
+        `;
         lbList.appendChild(li);
       });
     } catch (e) {

@@ -4,11 +4,25 @@
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 	<meta name="theme-color" content="#121213" />
+	<script>
+		(function () {
+			try {
+				var key = "wordle-mobile-theme";
+				var saved = localStorage.getItem(key);
+				var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+				var theme = saved || (prefersDark ? "dark" : "light");
+				document.documentElement.setAttribute("data-theme", theme);
+				document.body && document.body.setAttribute("data-theme", theme);
+				var meta = document.querySelector('meta[name="theme-color"]');
+				if (meta) meta.setAttribute("content", theme === "dark" ? "#121213" : "#ffffff");
+			} catch (_) {}
+		})();
+	</script>
 	<title>Wordle Unbound — Race Lobby</title>
 	<link rel="stylesheet" href="style.css" />
 	<link rel="stylesheet" href="race.css" />
 </head>
-<body data-theme="dark">
+<body>
 	<div id="app-loader" class="app-loader" role="status" aria-live="polite" aria-label="Loading Race Lobby">
 		<div class="loader-card">
 			<div class="loader-grid" aria-hidden="true">

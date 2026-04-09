@@ -78,6 +78,7 @@
   let opponentProgress = 0;
   let selfBestCorrect = 0;
   let opponentBestCorrect = 0;
+  let profileHeartbeatTimer = null;
   const wordValidationCache = {};
 
   function hideLoader() {
@@ -201,6 +202,27 @@
       history: Array.from(myHistorySet),
       ready: selfReady
     });
+  }
+
+  function stopProfileHeartbeat() {
+    if (!profileHeartbeatTimer) return;
+    clearInterval(profileHeartbeatTimer);
+    profileHeartbeatTimer = null;
+  }
+
+  function startProfileHeartbeat() {
+    stopProfileHeartbeat();
+    profileHeartbeatTimer = setInterval(() => {
+      if (!currentRoom || !channel) return;
+      void sendProfile();
+      if (selfReady && !raceStarted) {
+        void sendRaceEvent("ready", {
+          uuid: currentUser.uuid,
+          username: currentUser.username,
+          ready: true
+        });
+      }
+    }, 2200);
   }
 
   async function sendGreenProgress(correctCount) {
@@ -574,6 +596,7 @@
     setStatus("Round finished. Ready up for another game.");
     updatePresenceUI();
     void sendProfile();
+    startProfileHeartbeat();
   }
 
   async function sendRaceEvent(event, payload) {
@@ -746,6 +769,11 @@
           uuid: currentUser.uuid,
           username: currentUser.username
         });
+        startProfileHeartbeat();
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        setStatus("Connection unstable. Re-syncing room...");
+      } else if (status === "CLOSED") {
+        setStatus("Connection closed. Rejoin room if needed.");
       }
     });
 
@@ -783,6 +811,8 @@
       supabase.removeChannel(channel).catch(() => {});
       channel = null;
     }
+
+    stopProfileHeartbeat();
 
     const url = new URL(window.location.href);
     url.searchParams.delete("room");
@@ -971,11 +1001,29 @@
   });
 
   window.addEventListener("beforeunload", async () => {
+    stopProfileHeartbeat();
     if (raceTimer) clearInterval(raceTimer);
     if (channel) {
       try {
         await supabase.removeChannel(channel);
       } catch {}
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !currentRoom || !channel) return;
+    void sendProfile();
+    void sendRaceEvent("presence_ping", {
+      uuid: currentUser?.uuid,
+      username: currentUser?.username || "Player"
+    });
+
+    if (selfReady && !raceStarted) {
+      void sendRaceEvent("ready", {
+        uuid: currentUser.uuid,
+        username: currentUser.username,
+        ready: true
+      });
     }
   });
 
