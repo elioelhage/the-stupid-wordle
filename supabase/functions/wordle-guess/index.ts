@@ -45,6 +45,42 @@ function computeColors(guess: string, answer: string): string[] {
   return colors;
 }
 
+async function resolveWordForDay(admin: any, dayIndex: number) {
+  const exact = await admin
+    .from("words")
+    .select("word, day_index")
+    .eq("day_index", dayIndex)
+    .limit(1)
+    .maybeSingle();
+
+  if (!exact.error && exact.data?.word) {
+    return String(exact.data.word);
+  }
+
+  const countRes = await admin
+    .from("words")
+    .select("day_index", { count: "exact", head: true });
+
+  const count = Number(countRes.count) || 0;
+  if (count <= 0) {
+    throw new Error("No rows found in words table.");
+  }
+
+  const offset = ((dayIndex % count) + count) % count;
+  const rolled = await admin
+    .from("words")
+    .select("word, day_index")
+    .order("day_index", { ascending: true })
+    .range(offset, offset)
+    .maybeSingle();
+
+  if (rolled.error || !rolled.data?.word) {
+    throw new Error(rolled.error?.message || "Could not resolve word fallback.");
+  }
+
+  return String(rolled.data.word);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -86,17 +122,13 @@ Deno.serve(async (req) => {
       return json({ ok: false, code: "SESSION_NOT_FOUND" }, 404);
     }
 
-    const { data: wordRow, error: wordErr } = await admin
-      .from("words")
-      .select("word")
-      .eq("day_index", dayIndex)
-      .single();
-
-    if (wordErr || !wordRow?.word) {
-      return json({ ok: false, code: "WORD_NOT_FOUND" }, 404);
+    let answer: string;
+    try {
+      answer = String(await resolveWordForDay(admin, dayIndex)).toUpperCase().trim();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Word resolution failed.";
+      return json({ ok: false, code: "WORD_NOT_FOUND", message: msg }, 404);
     }
-
-    const answer = String(wordRow.word).toUpperCase().trim();
     const maxGuesses = getMaxGuesses(answer.length);
     const currentRequests = Number(session.request_count) || 0;
     if (currentRequests >= maxGuesses) {

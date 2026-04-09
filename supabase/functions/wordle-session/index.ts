@@ -37,6 +37,42 @@ function isUuidLike(value: unknown) {
   return typeof value === "string" && /^[0-9a-fA-F-]{30,80}$/.test(value);
 }
 
+async function resolveWordForDay(admin: any, dayIndex: number) {
+  const exact = await admin
+    .from("words")
+    .select("word, day_index")
+    .eq("day_index", dayIndex)
+    .limit(1)
+    .maybeSingle();
+
+  if (!exact.error && exact.data?.word) {
+    return { word: String(exact.data.word), source: "exact" as const };
+  }
+
+  const countRes = await admin
+    .from("words")
+    .select("day_index", { count: "exact", head: true });
+
+  const count = Number(countRes.count) || 0;
+  if (count <= 0) {
+    throw new Error("No rows found in words table.");
+  }
+
+  const offset = ((dayIndex % count) + count) % count;
+  const rolled = await admin
+    .from("words")
+    .select("word, day_index")
+    .order("day_index", { ascending: true })
+    .range(offset, offset)
+    .maybeSingle();
+
+  if (rolled.error || !rolled.data?.word) {
+    throw new Error(rolled.error?.message || "Could not resolve word fallback.");
+  }
+
+  return { word: String(rolled.data.word), source: "rolled" as const };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -73,18 +109,17 @@ Deno.serve(async (req) => {
 
     const principalKey = userUuid ? `user:${userUuid}` : `seed:${sessionSeed}`;
 
-    const { data: wordRow, error: wordErr } = await admin
-      .from("words")
-      .select("word")
-      .eq("day_index", dayIndex)
-      .single();
-
-    if (wordErr || !wordRow?.word) {
-      return json({ ok: false, code: "WORD_NOT_FOUND" }, 404);
+    let resolvedWord: string;
+    try {
+      const resolved = await resolveWordForDay(admin, dayIndex);
+      resolvedWord = resolved.word;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Word resolution failed.";
+      return json({ ok: false, code: "WORD_NOT_FOUND", message: msg }, 404);
     }
 
-  const wordLength = String(wordRow.word).trim().length;
-  const maxGuesses = getMaxGuesses(wordLength);
+    const wordLength = String(resolvedWord).trim().length;
+    const maxGuesses = getMaxGuesses(wordLength);
 
     const { data: existing, error: existingErr } = await admin
       .from("wordle_daily_sessions")
