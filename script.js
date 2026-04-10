@@ -226,11 +226,12 @@
   async function fetchTodaysWord() {
     if (WORD_SOURCE === "supabase" && supabase) {
       try {
-        const { data, error } = await supabase.from('words').select('word_hash, category, word_length').eq('day_index', solutionIndex).single();
+        const { data, error } = await supabase.from('words').select('word_hash, category, word_length, word').eq('day_index', solutionIndex).single();
         if (error) throw error;
         wordHash = data.word_hash;
         wordCategory = data.category;
         wordLength = data.word_length; // Now fully dynamic again!
+        solution = data.word.toUpperCase(); // Store the plaintext word for client-side color calc
       } catch (err) {
         console.error("Database query failed:", err);
         const obj = DAILY_WORDS[solutionIndex % DAILY_WORDS.length];
@@ -1378,18 +1379,8 @@
       const gHash = await hashGuess(guess, solutionIndex);
       isMatch = (gHash === wordHash);
       
-      const { data, error } = await supabase.rpc('check_guess', { 
-        p_day_index: solutionIndex, 
-        p_guess: guess.toLowerCase() 
-      });
-
-      if (error) {
-        console.error("Feedback RPC failed:", error);
-        showMessage("Server error checking guess.");
-        isSubmitting = false;
-        return;
-      }
-      colors = data;
+      // Calculate colors client-side using the plaintext word we already have
+      colors = getTileColors(guess, solution);
     } else {
       isMatch = (guess === solution);
       colors = getTileColors(guess, solution);
