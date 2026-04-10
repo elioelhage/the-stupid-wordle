@@ -930,6 +930,15 @@ select.text-input {
   padding-left: 1rem;
 }
 
+.lb-rules-panel svg {
+  display: inline;
+  width: 1em;
+  height: 1em;
+  stroke: currentColor;
+  vertical-align: -0.125em;
+  margin-right: 0.3em;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;

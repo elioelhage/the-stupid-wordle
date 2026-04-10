@@ -1214,7 +1214,7 @@
               const rawAvg = (Number(p.total_guesses) / GUESS_SCALE) / gamesPlayed;
               if (!Number.isFinite(rawAvg)) return null;
 
-              const shouldBeUnrated = gamesPlayed === 1 && unscaledAvg <= LEADERBOARD_LOW_AVG_THRESHOLD;
+              const shouldBeUnrated = gamesPlayed === 1 && rawAvg <= LEADERBOARD_LOW_AVG_THRESHOLD;
               if (shouldBeUnrated) {
                 return {
                   ...p,
@@ -1366,10 +1366,8 @@
       console.log("✅ Stats updated successfully - Games: " + newGamesPlayed + ", Total guesses: " + updates.total_guesses);
 
       if (currentBonus > previousBonus) {
-        const isNewTier = currentBonus > previousBonus;
-        const rewardText = isNewTier
-          ? `🔥 Milestone reached: ${newGamesPlayed} games played. Consistency bonus unlocked (${formatConsistencyBonus(currentBonus)}).`
-          : `🔥 Milestone reached: ${newGamesPlayed} games played.`;
+        const bonusReduction = (currentBonus - previousBonus).toFixed(2);
+        const rewardText = `🎉 Milestone! ${newGamesPlayed} games played. Your score now benefits from a -${bonusReduction} bonus.`;
         window.setTimeout(() => showMessage(rewardText), 900);
       }
 

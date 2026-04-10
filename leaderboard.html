@@ -147,6 +147,15 @@
       padding-left: 1rem;
     }
 
+    .rules-panel svg {
+      display: inline;
+      width: 1em;
+      height: 1em;
+      stroke: currentColor;
+      vertical-align: -0.125em;
+      margin-right: 0.3em;
+    }
+
     .top-actions {
       display: flex;
       align-items: center;
@@ -687,9 +696,8 @@
       <p><strong>How this leaderboard works</strong></p>
       <ul>
         <li><strong>Main score:</strong> your average guesses per game (lower is better).</li>
-  <li><strong>Unrated (???):</strong> only if your first-game average is 3.00 or lower. If your first-game average is above 3.00, you are rated immediately.</li>
-        <li><strong>Consistency bonus:</strong> total games played can slightly improve your rank score.</li>
-        <li><strong>Bonus milestones:</strong> 3, 7, 21, and 50 total games played.</li>
+        <li><strong>Unrated (???):</strong> only appears when you start. Once your first-game average goes above 3.00, you become rated and appear on the leaderboard immediately.</li>
+        <li><strong>Consistency bonus:</strong> reach 3, 7, 21, or 50 total games to unlock small score bonuses. The more you play, the better your score gets. <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg> = played</li>
       </ul>
     </div>
 
@@ -931,7 +939,7 @@
                 ...p,
                 rawAvg: scaledAvg,
                 unscaledRawAvg: unscaledAvg,
-                isUnrated: p.gamesPlayed === 0 || (p.gamesPlayed === 1 && unscaledAvg <= LEADERBOARD_LOW_AVG_THRESHOLD),
+                isUnrated: p.gamesPlayed === 0 || (p.gamesPlayed === 1 && scaledAvg <= LEADERBOARD_LOW_AVG_THRESHOLD),
                 adjustedScore: p.gamesPlayed > 0 ? applyConsistencyBonus(scaledAvg, p.gamesPlayed) : Number.POSITIVE_INFINITY
               };
             })
