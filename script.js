@@ -1210,8 +1210,8 @@
               const rawAvg = (Number(p.total_guesses) / GUESS_SCALE) / gamesPlayed;
               if (!Number.isFinite(rawAvg)) return null;
 
-              const needsExtraGame = rawAvg <= LEADERBOARD_LOW_AVG_THRESHOLD && gamesPlayed < LEADERBOARD_LOW_AVG_MIN_GAMES;
-              if (needsExtraGame) {
+              const shouldBeUnrated = gamesPlayed === 1 && rawAvg <= LEADERBOARD_LOW_AVG_THRESHOLD;
+              if (shouldBeUnrated) {
                 return {
                   ...p,
                   gamesPlayed,
@@ -1294,9 +1294,7 @@
 
         const gamesPlayed = Number(player.gamesPlayed ?? player.games_played) || 0;
         const bonusText = player.isUnrated
-          ? gamesPlayed <= 0
-            ? `<div class="lb-meta">Unrated • play your first game to unlock your score</div>`
-            : `<div class="lb-meta">Unrated for now • complete one more day to unlock your score</div>`
+          ? `<div class="lb-meta">Unrated for now • complete one more day to unlock your score</div>`
           : Number(player.consistencyBonus) > 0
             ? `<div class="lb-meta">Avg ${player.avg} guesses • milestone bonus active (${gamesPlayed} games played)</div>`
             : `<div class="lb-meta">Avg ${player.avg} guesses</div>`;

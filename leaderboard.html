@@ -444,23 +444,90 @@
 
     .name {
       min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.06rem;
       font-weight: 760;
     }
 
     .name-main {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      margin: 0;
+      font: inherit;
+      font-weight: inherit;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      cursor: pointer;
+      text-align: left;
     }
 
-    .name-meta {
-      font-size: 0.74rem;
-      line-height: 1.2;
-      opacity: 0.74;
-      font-weight: 600;
+    .name-main:hover {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .name-main:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+      outline-offset: 3px;
+      border-radius: 6px;
+    }
+
+    .player-sheet {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 1rem;
+    }
+
+    .player-sheet.open {
+      display: flex;
+    }
+
+    .player-sheet-card {
+      width: min(94vw, 28rem);
+      border-radius: 16px;
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      padding: 1rem;
+    }
+
+    .player-sheet-title {
+      margin: 0 0 0.7rem;
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+
+    .player-sheet-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0.5rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .player-sheet-list strong {
+      color: var(--text);
+      margin-right: 0.3rem;
+    }
+
+    .player-sheet-close {
+      margin-top: 0.9rem;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 0.62rem 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
     }
 
     .you {
@@ -620,7 +687,7 @@
       <p><strong>How this leaderboard works</strong></p>
       <ul>
         <li><strong>Main score:</strong> your average guesses per game (lower is better).</li>
-        <li><strong>Unrated (???):</strong> if your average is 3.00 or better and you've only played 1 game, your score stays hidden until you play one more day.</li>
+  <li><strong>Unrated (???):</strong> only if your first-game average is 3.00 or lower. If your first-game average is above 3.00, you are rated immediately.</li>
         <li><strong>Consistency bonus:</strong> total games played can slightly improve your rank score.</li>
         <li><strong>Bonus milestones:</strong> 3, 7, 21, and 50 total games played.</li>
       </ul>
@@ -636,6 +703,19 @@
       </div>
       <ul id="lb-list" class="list" aria-live="polite"></ul>
     </section>
+
+    <div id="player-sheet" class="player-sheet" role="dialog" aria-modal="true" aria-labelledby="player-sheet-title">
+      <div class="player-sheet-card">
+        <h2 id="player-sheet-title" class="player-sheet-title">Player details</h2>
+        <ul class="player-sheet-list">
+          <li><strong>Name:</strong> <span id="player-sheet-name">—</span></li>
+          <li><strong>Joined:</strong> <span id="player-sheet-joined">—</span></li>
+          <li><strong>Raw avg guesses:</strong> <span id="player-sheet-avg">—</span></li>
+          <li><strong>Total games played:</strong> <span id="player-sheet-games">—</span></li>
+        </ul>
+        <button id="player-sheet-close" class="player-sheet-close" type="button">Close</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -661,6 +741,12 @@
       const lbProgressEl = document.getElementById("lb-progress");
       const rulesToggleEl = document.getElementById("rules-toggle");
       const rulesPanelEl = document.getElementById("rules-panel");
+  const playerSheetEl = document.getElementById("player-sheet");
+  const playerSheetNameEl = document.getElementById("player-sheet-name");
+  const playerSheetJoinedEl = document.getElementById("player-sheet-joined");
+  const playerSheetAvgEl = document.getElementById("player-sheet-avg");
+  const playerSheetGamesEl = document.getElementById("player-sheet-games");
+  const playerSheetCloseEl = document.getElementById("player-sheet-close");
 
       rulesToggleEl?.addEventListener("click", () => {
         if (!rulesPanelEl) return;
@@ -685,6 +771,31 @@
       }
 
       const todayIndex = getCurrentSolutionIndex();
+
+      function formatJoinDate(createdAt) {
+        if (!createdAt) return "Unknown";
+        const dt = new Date(createdAt);
+        if (Number.isNaN(dt.getTime())) return "Unknown";
+        return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+      }
+
+      function openPlayerSheet(player) {
+        if (!playerSheetEl) return;
+        playerSheetNameEl.textContent = player.username || "Unknown";
+        playerSheetJoinedEl.textContent = formatJoinDate(player.created_at);
+        playerSheetAvgEl.textContent = Number.isFinite(player.rawAvg) ? Number(player.rawAvg).toFixed(2) : "—";
+        playerSheetGamesEl.textContent = String(Number(player.gamesPlayed) || 0);
+        playerSheetEl.classList.add("open");
+      }
+
+      function closePlayerSheet() {
+        playerSheetEl?.classList.remove("open");
+      }
+
+      playerSheetCloseEl?.addEventListener("click", closePlayerSheet);
+      playerSheetEl?.addEventListener("click", (e) => {
+        if (e.target === playerSheetEl) closePlayerSheet();
+      });
 
       function getGamesPlayedBonus(gamesPlayedValue) {
         const gamesPlayed = Number(gamesPlayedValue) || 0;
@@ -759,16 +870,20 @@
               <span class="rank">#${rankNumber}</span>
               ${medalSvg[rankNumber - 1] || ""}
               <span class="name">
-                <span class="name-main">
+                <button class="name-main" type="button">
                   ${player.username}
                   ${currentUser && player.username === currentUser ? `<span class="you">(Me)</span>` : ""}
-                </span>
-                <span class="name-meta">${player.metaLine}</span>
+                </button>
               </span>
               ${badges}
             </div>
             <div class="score ${player.isUnrated ? "unrated" : ""}">${player.scoreLabel}</div>
           `;
+
+          const nameMainBtn = li.querySelector(".name-main");
+          if (nameMainBtn) {
+            nameMainBtn.addEventListener("click", () => openPlayerSheet(player));
+          }
 
           listEl.appendChild(li);
         });
@@ -784,20 +899,20 @@
 
           ({ data, error } = await supabase
             .from("leaderboards")
-            .select("username, games_played, total_guesses, last_hint_day_index, last_played_day_index, saved_state")
+            .select("username, games_played, total_guesses, created_at, last_hint_day_index, last_played_day_index, saved_state")
             .order("games_played", { ascending: false }));
 
           if (error) {
             ({ data, error } = await supabase
               .from("leaderboards")
-              .select("username, games_played, total_guesses, last_hint_day_index, saved_state")
+              .select("username, games_played, total_guesses, created_at, last_hint_day_index, saved_state")
               .order("games_played", { ascending: false }));
           }
 
           if (error) {
             ({ data, error } = await supabase
               .from("leaderboards")
-              .select("username, games_played, total_guesses, saved_state")
+              .select("username, games_played, total_guesses, created_at, saved_state")
               .order("games_played", { ascending: false }));
           }
 
@@ -815,7 +930,7 @@
             }))
             .map((p) => ({
               ...p,
-              isUnrated: p.gamesPlayed === 0 || (p.rawAvg <= LEADERBOARD_LOW_AVG_THRESHOLD && p.gamesPlayed < LEADERBOARD_LOW_AVG_MIN_GAMES),
+              isUnrated: p.gamesPlayed === 0 || (p.gamesPlayed === 1 && p.rawAvg <= LEADERBOARD_LOW_AVG_THRESHOLD),
               adjustedScore: p.gamesPlayed > 0 ? applyConsistencyBonus(p.rawAvg, p.gamesPlayed) : Number.POSITIVE_INFINITY
             }))
             .sort((a, b) => {
@@ -826,19 +941,11 @@
             })
             .map((p, idx) => {
               const gamesPlayed = Number(p.gamesPlayed) || 0;
-              const metaLine = p.isUnrated
-                ? gamesPlayed <= 0
-                  ? "Unrated • play your first game to unlock your score"
-                  : "Unrated for now • complete one more day to unlock your score"
-                : Number(getGamesPlayedBonus(gamesPlayed)) > 0
-                  ? `Avg ${Number(p.rawAvg).toFixed(2)} guesses • milestone bonus active (${gamesPlayed} games played)`
-                  : `Avg ${Number(p.rawAvg).toFixed(2)} guesses`;
 
               return {
                 ...p,
                 rank: idx + 1,
-                scoreLabel: p.isUnrated ? "???" : Number(p.adjustedScore).toFixed(2),
-                metaLine
+                scoreLabel: p.isUnrated ? "???" : Number(p.adjustedScore).toFixed(2)
               };
             });
 
