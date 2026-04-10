@@ -81,7 +81,7 @@
     return Math.max(0, Math.floor((localDateAsUTC - launchDate) / 86400000));
   }
 
-  const daysPassed = 11;
+  const daysPassed = getCurrentSolutionIndex();
 
   if (WORD_SOURCE !== "supabase" && daysPassed >= DAILY_WORDS.length) {
     boardEl.innerHTML = `
@@ -203,57 +203,6 @@
 
   function generateUUID() { return crypto.randomUUID(); }
 
-  // NOTE: User requested client-side AES decryption with provided key.
-  // Format assumption for `word_encrypted`:
-  // base64(12-byte IV || ciphertext+tag)
-  const WORDSHIFT_AES_KEY_HEX = "0f55cbb6cc1ba7a09803f99276dcec8f9a4e4bb8e833a0a9c90c176e711db892";
-
-  function hexToBytes(hex) {
-    const clean = (hex || "").trim();
-    if (!/^[0-9a-fA-F]+$/.test(clean) || clean.length % 2 !== 0) {
-      throw new Error("Invalid AES key hex format.");
-    }
-    const out = new Uint8Array(clean.length / 2);
-    for (let i = 0; i < clean.length; i += 2) {
-      out[i / 2] = parseInt(clean.slice(i, i + 2), 16);
-    }
-    return out;
-  }
-
-  function base64ToBytes(base64) {
-    const binary = atob(base64);
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
-    return out;
-  }
-
-  async function decryptEncryptedWord(payloadBase64) {
-    if (!payloadBase64) throw new Error("Missing encrypted payload.");
-
-    const keyBytes = hexToBytes(WORDSHIFT_AES_KEY_HEX);
-    const payload = base64ToBytes(payloadBase64);
-    if (payload.length < 13) throw new Error("Encrypted payload is too short.");
-
-    const iv = payload.slice(0, 12);
-    const ciphertext = payload.slice(12);
-
-    const cryptoKey = await crypto.subtle.importKey(
-      "raw",
-      keyBytes,
-      { name: "AES-GCM" },
-      false,
-      ["decrypt"]
-    );
-
-    const plainBuffer = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      cryptoKey,
-      ciphertext
-    );
-
-    return new TextDecoder().decode(plainBuffer).trim().toUpperCase();
-  }
-
   function getUserData() {
     let data = localStorage.getItem(userKey);
     if (!data) {
@@ -268,38 +217,23 @@
   async function fetchTodaysWord() {
     if (WORD_SOURCE === "supabase" && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('words')
-          .select('word_encrypted, word_length, category')
-          .eq('day_index', solutionIndex)
-          .single();
+        const { data, error } = await supabase.from('words').select('word, category').eq('day_index', solutionIndex).single();
         if (error) throw error;
-
-        solution = await decryptEncryptedWord(data.word_encrypted);
-        if (!solution) throw new Error("Decryption returned empty word.");
-
-        if (typeof data.word_length === "number" && data.word_length > 0 && solution.length !== data.word_length) {
-          throw new Error(`Decrypted word length mismatch: got ${solution.length}, expected ${data.word_length}`);
-        }
-
+        solution = data.word.toUpperCase();
         wordCategory = data.category;
-        wordLength = typeof data.word_length === "number" && data.word_length > 0
-          ? data.word_length
-          : solution.length;
       } catch (err) {
         console.error("Database query failed:", err);
         const obj = DAILY_WORDS[solutionIndex % DAILY_WORDS.length];
         solution = obj.word.toUpperCase();
         wordCategory = obj.category;
-        wordLength = solution.length;
       }
     } else {
       const obj = DAILY_WORDS[solutionIndex];
       solution = obj.word.toUpperCase();
       wordCategory = obj.category;
-      wordLength = solution.length;
     }
 
+    wordLength = solution.length;
     maxRows = wordLength <= 5 ? 6 : wordLength + 1;
     maxHints = wordLength >= 7 ? 3 : 2; // Dynamic 3rd hint for 7+ letters
 
@@ -1571,7 +1505,7 @@
       const tomorrow = new Date();
       tomorrow.setHours(24, 0, 0, 0);
       const diff = tomorrow.getTime() - now.getTime();
-      if (diff <= 0 || getCurrentSolutionIndex() !== solutionIndex) {
+      if (diff <= 0) {
         countdownEl.textContent = "00:00:00";
         triggerDayReset();
         return;
@@ -1646,9 +1580,7 @@
   window.addEventListener("resize", () => boardEl.style.setProperty("--tile-size", computeTileSize() + "px"));
   modal.addEventListener("click", (e) => { if (e.target === modal) hideEndModal(); });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && getCurrentSolutionIndex() !== solutionIndex) {
-      triggerDayReset();
-    }
+    // Disabled auto day-mismatch reset to avoid loading-screen flashes when tabbing back.
   });
 
 })();
