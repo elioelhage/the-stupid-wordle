@@ -20,6 +20,17 @@
 
   const WORD_SOURCE = "supabase";
   const GUESS_SCALE = 10;
+  const LEADERBOARD_LOW_AVG_THRESHOLD = 3.0;
+  const LEADERBOARD_LOW_AVG_MIN_GAMES = 2;
+  const LEADERBOARD_STREAK_BONUS_MODE = "flat"; // "flat" | "percent"
+  const LEADERBOARD_STREAK_BONUS_CAP = 0.15;
+
+  const LEADERBOARD_STREAK_BONUS_TIERS = [
+    { streak: 50, bonus: 0.15 },
+    { streak: 21, bonus: 0.10 },
+    { streak: 7, bonus: 0.06 },
+    { streak: 3, bonus: 0.03 }
+  ];
 
   const safeWords = typeof WORDS !== "undefined" ? WORDS : [
     { word: "CEDAR", category: "Lebanon" },
@@ -1118,6 +1129,40 @@
     accountActionBtn.textContent = userData?.username ? "Log out" : "Sign in / Sign up";
   }
 
+  function getStreakBonus(streakValue) {
+    const streak = Number(streakValue) || 0;
+    const tier = LEADERBOARD_STREAK_BONUS_TIERS.find((t) => streak >= t.streak);
+    return Math.min(LEADERBOARD_STREAK_BONUS_CAP, tier ? tier.bonus : 0);
+  }
+
+  function applyConsistencyBonus(baseAvg, streakValue) {
+    const avg = Number(baseAvg);
+    if (!Number.isFinite(avg) || avg <= 0) return { score: avg, bonusApplied: 0 };
+
+    const bonus = getStreakBonus(streakValue);
+    if (bonus <= 0) return { score: avg, bonusApplied: 0 };
+
+    if (LEADERBOARD_STREAK_BONUS_MODE === "percent") {
+      return {
+        score: Math.max(0, avg * (1 - bonus)),
+        bonusApplied: bonus
+      };
+    }
+
+    return {
+      score: Math.max(0, avg - bonus),
+      bonusApplied: bonus
+    };
+  }
+
+  function formatConsistencyBonus(bonusValue) {
+    const bonus = Number(bonusValue) || 0;
+    if (LEADERBOARD_STREAK_BONUS_MODE === "percent") {
+      return `${Math.round(bonus * 100)}%`;
+    }
+    return `-${bonus.toFixed(2)}`;
+  }
+
   async function loadLeaderboardData(type) {
     const requestedType = type === "avg" ? "avg" : "avg";
     lbLoading.classList.remove("hidden");
@@ -1129,14 +1174,38 @@
       let data = [];
       if (requestedType === "avg") {
         const { data: res, error } = await supabase.from('leaderboards')
-          .select('username, games_played, total_guesses, total_hints, last_hint_day_index')
+          .select('username, games_played, total_guesses, total_hints, last_hint_day_index, winstreak')
           .order('games_played', { ascending: false });
         if (error) throw error;
         if (res && res.length > 0) {
-          data = res.map(p => ({
-            ...p,
-            avg: ((p.total_guesses / GUESS_SCALE) / p.games_played).toFixed(2)
-          })).sort((a, b) => a.avg - b.avg).slice(0, 50);
+          data = res
+            .map((p) => {
+              const gamesPlayed = Number(p.games_played) || 0;
+              if (gamesPlayed <= 0) return null;
+
+              const rawAvg = (Number(p.total_guesses) / GUESS_SCALE) / gamesPlayed;
+              if (!Number.isFinite(rawAvg)) return null;
+
+              const needsExtraGame = rawAvg <= LEADERBOARD_LOW_AVG_THRESHOLD && gamesPlayed < LEADERBOARD_LOW_AVG_MIN_GAMES;
+              if (needsExtraGame) return null;
+
+              const streakBonus = applyConsistencyBonus(rawAvg, p.winstreak);
+              return {
+                ...p,
+                avgRaw: rawAvg,
+                avg: rawAvg.toFixed(2),
+                rankScoreRaw: streakBonus.score,
+                rankScore: streakBonus.score.toFixed(2),
+                consistencyBonus: streakBonus.bonusApplied
+              };
+            })
+            .filter(Boolean)
+            .sort((a, b) => {
+              if (a.rankScoreRaw !== b.rankScoreRaw) return a.rankScoreRaw - b.rankScoreRaw;
+              if (a.avgRaw !== b.avgRaw) return a.avgRaw - b.avgRaw;
+              return (b.games_played || 0) - (a.games_played || 0);
+            })
+            .slice(0, 50);
         }
       }
 
@@ -1162,7 +1231,7 @@
         else if (index === 2) li.classList.add("rank-3");
 
         let medal = index === 0 ? medal1 : index === 1 ? medal2 : index === 2 ? medal3 : "";
-  const scoreVal = player.avg;
+  const scoreVal = player.rankScore ?? player.avg;
         
         let hintBadge = "";
         if (player.last_hint_day_index === solutionIndex) {
@@ -1176,11 +1245,19 @@
         let displayName = player.username + hintBadge;
         if (player.username === currentUser) displayName += " <i style='opacity: 0.6; font-weight: normal; font-size: 0.85em;'>(Me)</i>";
 
+        const streakDays = Number(player.winstreak) || 0;
+        const bonusText = Number(player.consistencyBonus) > 0
+          ? `<div class="lb-meta">Avg ${player.avg} guesses • ${streakDays}-day streak active</div>`
+          : `<div class="lb-meta">Avg ${player.avg} guesses</div>`;
+
         li.innerHTML = `
           <div class="lb-left">
             <span class="rank">#${index + 1}</span>
             ${medal}
-            <span class="lb-name">${displayName}</span>
+            <div class="lb-name">
+              <div class="lb-name-main">${displayName}</div>
+              ${bonusText}
+            </div>
           </div>
           <div class="lb-score">${scoreVal}</div>
         `;
@@ -1211,6 +1288,8 @@
 
       const currentStreak = skippedAtLeastOneDay ? 0 : (userRecord.winstreak || 0);
       const newWinstreak = won ? currentStreak + 1 : 0;
+      const previousBonus = getStreakBonus(currentStreak);
+      const currentBonus = won ? getStreakBonus(newWinstreak) : 0;
 
       const updates = {
         games_played: userRecord.games_played + 1,
@@ -1218,9 +1297,19 @@
         winstreak: newWinstreak,
         max_winstreak: Math.max(newWinstreak, userRecord.max_winstreak ?? 0),
         total_hints: (userRecord.total_hints || 0) + hints,
-        last_hint_day_index: hints > 0 ? solutionIndex : userRecord.last_hint_day_index ?? null
+        last_hint_day_index: hints > 0 ? solutionIndex : userRecord.last_hint_day_index ?? null,
+        last_played_day_index: solutionIndex
       };
       await supabase.from('leaderboards').update(updates).eq('uuid', userData.uuid);
+
+      if (won && currentBonus > 0) {
+        const isNewTier = currentBonus > previousBonus;
+        const rewardText = isNewTier
+          ? `🔥 ${newWinstreak}-day streak! Consistency bonus unlocked (${formatConsistencyBonus(currentBonus)}).`
+          : `🔥 ${newWinstreak}-day streak. Consistency bonus active (${formatConsistencyBonus(currentBonus)}).`;
+        window.setTimeout(() => showMessage(rewardText), 900);
+      }
+
       hasSubmittedToLeaderboard = true;
       saveState();
     } catch (e) { console.error("Error updating stats", e); }

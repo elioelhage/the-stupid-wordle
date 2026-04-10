@@ -884,6 +884,14 @@ select.text-input {
   padding-right: 2.8rem;
 }
 
+.lb-subtitle {
+  margin: -0.1rem 0 0.65rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  max-width: 52ch;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1014,10 +1022,24 @@ select.text-input {
 }
 
 .lb-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 16rem;
+}
+
+.lb-name-main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 16rem;
+}
+
+.lb-meta {
+  font-size: 0.74rem;
+  opacity: 0.74;
+  line-height: 1.2;
 }
 
 .lb-self {
