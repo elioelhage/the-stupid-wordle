@@ -114,6 +114,39 @@
       line-height: 1.45;
     }
 
+    .rules-toggle {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.38rem 0.72rem;
+      font-size: 0.8rem;
+      font-weight: 760;
+      cursor: pointer;
+      margin-bottom: 0.55rem;
+    }
+
+    .rules-panel {
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+      background: color-mix(in srgb, var(--surface-2) 68%, transparent);
+      border-radius: 12px;
+      padding: 0.65rem 0.8rem;
+      margin: 0 0 1.1rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .rules-panel p {
+      margin: 0 0 0.34rem;
+      color: var(--text);
+    }
+
+    .rules-panel ul {
+      margin: 0;
+      padding-left: 1rem;
+    }
+
     .top-actions {
       display: flex;
       align-items: center;
@@ -411,11 +444,25 @@
 
     .name {
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.06rem;
+      font-weight: 760;
+    }
+
+    .name-main {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      font-weight: 760;
     }
+
+    .name-meta {
+      font-size: 0.74rem;
+      line-height: 1.2;
+      opacity: 0.74;
+      font-weight: 600;
+    }
+
     .you {
       margin-left: 0.35rem;
       opacity: 0.66;
@@ -488,6 +535,15 @@
       color: inherit;
     }
 
+    .item.unrated {
+      border-style: dashed;
+    }
+
+    .score.unrated {
+      letter-spacing: 0.06em;
+      opacity: 0.82;
+    }
+
     .state {
       text-align: center;
       color: var(--muted);
@@ -558,7 +614,18 @@
       </div>
     </header>
     
-    <p class="leaderboard-info">Welcome to the WordShift Leaderboard. Rankings are based on average guesses, with an activity adjustment applied only to the top three players: after 4 inactive days, a +0.15 penalty is added every 2 days; all other positions remain unaffected by decay.</p>
+    <p class="leaderboard-info">Rankings are based on average guesses. Lower is better, and active streaks can give a small consistency bonus.</p>
+    <button id="rules-toggle" class="rules-toggle" type="button" aria-expanded="false" aria-controls="rules-panel">Leaderboard rules</button>
+    <div id="rules-panel" class="rules-panel hidden">
+      <p><strong>How this leaderboard works</strong></p>
+      <ul>
+        <li><strong>Main score:</strong> your average guesses per game (lower is better).</li>
+        <li><strong>Unrated (???):</strong> if your average is 3.00 or better and you've only played 1 game, your score stays hidden until you play one more day.</li>
+        <li><strong>Consistency bonus:</strong> streaks can slightly improve your rank score.</li>
+        <li><strong>Streak tiers:</strong> 3-day, 7-day, 21-day, and 50-day streaks.</li>
+        <li><strong>Streak reset:</strong> skipping a day or failing a day resets your streak.</li>
+      </ul>
+    </div>
 
     <section class="shell" aria-label="Leaderboard list">
       <div class="meta">
@@ -578,14 +645,30 @@
       const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZWhzeG51ZGJ3anlkdmVubGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NzAsImV4cCI6MjA5MDY1Mjg3MH0.dPawhX90yZrme7nftMTq6A1j-KGqfHZJ8QnbBeFurl8";
       const GUESS_SCALE = 10;
       const launchDate = Date.UTC(2026, 3, 1);
-  const DECAY_START_AFTER_DAYS = 4;
-  const DECAY_STEP_DAYS = 2;
-  const DECAY_STEP_VALUE = 0.15;
+      const LEADERBOARD_LOW_AVG_THRESHOLD = 3.0;
+      const LEADERBOARD_LOW_AVG_MIN_GAMES = 2;
+      const LEADERBOARD_STREAK_BONUS_MODE = "flat";
+      const LEADERBOARD_STREAK_BONUS_CAP = 0.15;
+      const LEADERBOARD_STREAK_BONUS_TIERS = [
+        { streak: 50, bonus: 0.15 },
+        { streak: 21, bonus: 0.10 },
+        { streak: 7, bonus: 0.06 },
+        { streak: 3, bonus: 0.03 }
+      ];
 
       const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
       const listEl = document.getElementById("lb-list");
       const metaCountEl = document.getElementById("meta-count");
-  const lbProgressEl = document.getElementById("lb-progress");
+      const lbProgressEl = document.getElementById("lb-progress");
+      const rulesToggleEl = document.getElementById("rules-toggle");
+      const rulesPanelEl = document.getElementById("rules-panel");
+
+      rulesToggleEl?.addEventListener("click", () => {
+        if (!rulesPanelEl) return;
+        const isHidden = rulesPanelEl.classList.contains("hidden");
+        rulesPanelEl.classList.toggle("hidden", !isHidden);
+        rulesToggleEl.setAttribute("aria-expanded", String(isHidden));
+      });
 
       const currentUser = (() => {
         try {
@@ -604,26 +687,24 @@
 
       const todayIndex = getCurrentSolutionIndex();
 
-      function getLastActiveIndex(player) {
-        if (typeof player?.last_played_day_index === "number" && Number.isFinite(player.last_played_day_index)) {
-          return player.last_played_day_index;
-        }
-        if (player?.saved_state && typeof player.saved_state.solutionIndex === "number" && Number.isFinite(player.saved_state.solutionIndex)) {
-          return player.saved_state.solutionIndex;
-        }
-        return null;
+      function getStreakBonus(streakValue) {
+        const streak = Number(streakValue) || 0;
+        const tier = LEADERBOARD_STREAK_BONUS_TIERS.find((t) => streak >= t.streak);
+        return Math.min(LEADERBOARD_STREAK_BONUS_CAP, tier ? tier.bonus : 0);
       }
 
-      function getTopThreeDecayPenalty(player) {
-        const lastActive = getLastActiveIndex(player);
-        if (lastActive === null) return 0;
+      function applyConsistencyBonus(baseAvg, streakValue) {
+        const avg = Number(baseAvg);
+        if (!Number.isFinite(avg) || avg <= 0) return avg;
 
-        const idleDays = Math.max(0, todayIndex - lastActive);
-        if (idleDays <= DECAY_START_AFTER_DAYS) return 0;
+        const bonus = getStreakBonus(streakValue);
+        if (bonus <= 0) return avg;
 
-        const elapsedAfterGrace = idleDays - DECAY_START_AFTER_DAYS;
-        const steps = Math.floor(elapsedAfterGrace / DECAY_STEP_DAYS);
-        return steps * DECAY_STEP_VALUE;
+        if (LEADERBOARD_STREAK_BONUS_MODE === "percent") {
+          return Math.max(0, avg * (1 - bonus));
+        }
+
+        return Math.max(0, avg - bonus);
       }
 
       const medalSvg = {
@@ -654,12 +735,14 @@
         listEl.innerHTML = "";
         metaCountEl.textContent = `${rows.length} players`;
 
-        rows.forEach((player, i) => {
+        rows.forEach((player) => {
           const li = document.createElement("li");
           li.className = "item";
-          if (i === 0) li.classList.add("rank-1");
-          else if (i === 1) li.classList.add("rank-2");
-          else if (i === 2) li.classList.add("rank-3");
+          const rankNumber = player.rank || 0;
+          if (rankNumber === 1) li.classList.add("rank-1");
+          else if (rankNumber === 2) li.classList.add("rank-2");
+          else if (rankNumber === 3) li.classList.add("rank-3");
+          if (player.isUnrated) li.classList.add("unrated");
 
           const usedHintToday = Number(player.last_hint_day_index) === todayIndex;
           const playedToday = Number(player.last_played_day_index) === todayIndex
@@ -674,15 +757,18 @@
 
           li.innerHTML = `
             <div class="left">
-              <span class="rank">#${i + 1}</span>
-              ${medalSvg[i] || ""}
+              <span class="rank">#${rankNumber}</span>
+              ${medalSvg[rankNumber - 1] || ""}
               <span class="name">
-                ${player.username}
-                ${currentUser && player.username === currentUser ? `<span class="you">(Me)</span>` : ""}
+                <span class="name-main">
+                  ${player.username}
+                  ${currentUser && player.username === currentUser ? `<span class="you">(Me)</span>` : ""}
+                </span>
+                <span class="name-meta">${player.metaLine}</span>
               </span>
               ${badges}
             </div>
-            <div class="score">${player.avg}</div>
+            <div class="score ${player.isUnrated ? "unrated" : ""}">${player.scoreLabel}</div>
           `;
 
           listEl.appendChild(li);
@@ -699,13 +785,13 @@
 
           ({ data, error } = await supabase
             .from("leaderboards")
-            .select("username, games_played, total_guesses, last_hint_day_index, last_played_day_index, saved_state")
+            .select("username, games_played, total_guesses, last_hint_day_index, last_played_day_index, saved_state, winstreak")
             .order("games_played", { ascending: false }));
 
           if (error) {
             ({ data, error } = await supabase
               .from("leaderboards")
-              .select("username, games_played, total_guesses, last_hint_day_index, saved_state")
+              .select("username, games_played, total_guesses, last_hint_day_index, saved_state, winstreak")
               .order("games_played", { ascending: false }));
           }
 
@@ -718,27 +804,44 @@
 
           if (error) throw error;
 
-          const rows = (data || [])
+          const ranked = (data || [])
             .filter((p) => p.username && Number(p.games_played) > 0)
             .map((p) => ({
               ...p,
               rawAvg: (Number(p.total_guesses || 0) / GUESS_SCALE) / Number(p.games_played || 1)
             }))
-            .sort((a, b) => Number(a.rawAvg) - Number(b.rawAvg));
-
-          rows.slice(0, 3).forEach((p) => {
-            p.decayPenalty = getTopThreeDecayPenalty(p);
-          });
-
-          const rankedRows = rows
             .map((p) => ({
               ...p,
-              decayPenalty: Number(p.decayPenalty || 0),
-              avgValue: Number(p.rawAvg) + Number(p.decayPenalty || 0),
-              avg: (Number(p.rawAvg) + Number(p.decayPenalty || 0)).toFixed(2)
+              isUnrated: p.rawAvg <= LEADERBOARD_LOW_AVG_THRESHOLD && Number(p.games_played) < LEADERBOARD_LOW_AVG_MIN_GAMES,
+              adjustedScore: applyConsistencyBonus(p.rawAvg, p.winstreak)
             }))
-            .sort((a, b) => Number(a.avgValue) - Number(b.avgValue))
-            .slice(0, 50);
+            .sort((a, b) => {
+              if (a.isUnrated !== b.isUnrated) return a.isUnrated ? 1 : -1;
+              if (Number(a.adjustedScore) !== Number(b.adjustedScore)) return Number(a.adjustedScore) - Number(b.adjustedScore);
+              if (Number(a.rawAvg) !== Number(b.rawAvg)) return Number(a.rawAvg) - Number(b.rawAvg);
+              return Number(b.games_played || 0) - Number(a.games_played || 0);
+            })
+            .map((p, idx) => {
+              const streakDays = Number(p.winstreak) || 0;
+              const metaLine = p.isUnrated
+                ? "Unrated for now • complete one more day to unlock your score"
+                : streakDays >= 3
+                  ? `Avg ${Number(p.rawAvg).toFixed(2)} guesses • ${streakDays}-day streak active`
+                  : `Avg ${Number(p.rawAvg).toFixed(2)} guesses`;
+
+              return {
+                ...p,
+                rank: idx + 1,
+                scoreLabel: p.isUnrated ? "???" : Number(p.adjustedScore).toFixed(2),
+                metaLine
+              };
+            });
+
+          let rankedRows = ranked.slice(0, 50);
+          if (currentUser && !rankedRows.some((p) => p.username === currentUser)) {
+            const me = ranked.find((p) => p.username === currentUser);
+            if (me) rankedRows = [...rankedRows, me];
+          }
 
           renderRows(rankedRows);
         } catch (err) {
