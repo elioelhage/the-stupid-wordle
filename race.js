@@ -834,6 +834,19 @@
     opponentBestCorrect = 0;
     selfReady = false;
     opponentReady = false;
+
+    // Reset visual badges physically so no ghost ready state remains
+    setReadyBadge(presenceSelfReadyEl, false);
+    if (presenceOpponentReadyEl) setReadyBadge(presenceOpponentReadyEl, false);
+
+    // Force synchronize the not-ready state across to out-of-sync opponents
+    if (channel && currentUser) {
+      sendRaceEvent("ready", {
+        uuid: currentUser.uuid,
+        ready: false
+      }).catch(err => console.error("Failed to broadcast ready reset:", err));
+    }
+
     startBroadcasted = false;
   opponentLeftHandled = false;
   raceDrawSent = false;
