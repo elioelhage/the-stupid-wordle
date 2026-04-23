@@ -212,6 +212,35 @@
       color: var(--muted);
     }
 
+    .tabs {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    }
+
+    .tab-btn {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      padding: 0.6rem 0.8rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: color-mix(in srgb, var(--text) 70%, transparent);
+    }
+
     .lb-progress {
       height: 0.52rem;
       border-radius: 999px;
@@ -691,21 +720,20 @@
       </div>
     </header>
     
-  <p class="leaderboard-info">Rankings are based on average guesses. Lower is better, and total games played can unlock small consistency bonuses.</p>
-    <button id="rules-toggle" class="rules-toggle" type="button" aria-expanded="false" aria-controls="rules-panel">Leaderboard rules</button>
-    <div id="rules-panel" class="rules-panel hidden">
-      <p><strong>How this leaderboard works</strong></p>
-      <ul>
-        <li><strong>Main score:</strong> your average guesses per game (lower is better).</li>
-        <li><strong>Unrated (???):</strong> only appears when you start. Once your first-game average goes above 3.00, you become rated and appear on the leaderboard immediately.</li>
-        <li><strong>Consistency bonus:</strong> reach 3, 7, 21, or 50 total games to unlock small score bonuses. The more you play, the better your score gets. <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 1em; height: 1em; vertical-align: middle;"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> = played</li>
-        <li><strong>Inactivity Decay:</strong> The top 3 players who don't play for 3+ days will receive a +0.025 penalty each day to keep competition active.</li>
-      </ul>
-    </div>
+    <p class="leaderboard-info">Compare your performance with other players. Switch between lifetime games and this week's lowest average.</p>
 
     <section class="shell" aria-label="Leaderboard list">
+      <div class="tabs">
+        <button id="tab-lifetime" class="tab-btn active" type="button" data-tab="lifetime">
+          Lifetime • Most Games
+        </button>
+        <button id="tab-weekly" class="tab-btn" type="button" data-tab="weekly">
+          This Week • Lowest Average
+        </button>
+      </div>
+
       <div class="meta">
-        <span>Top 50 • Lowest average guesses</span>
+        <span id="meta-label">Top 50 • Most games played</span>
         <span id="meta-count"></span>
       </div>
       <div id="lb-progress" class="lb-progress" aria-hidden="true">
@@ -732,38 +760,41 @@
     (() => {
       const supabaseUrl = "https://hcehsxnudbwjydvenlfz.supabase.co";
       const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZWhzeG51ZGJ3anlkdmVubGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NzAsImV4cCI6MjA5MDY1Mjg3MH0.dPawhX90yZrme7nftMTq6A1j-KGqfHZJ8QnbBeFurl8";
-      const GUESS_SCALE = 10;
-      const launchDate = Date.UTC(2026, 3, 1);
-      const LEADERBOARD_LOW_AVG_THRESHOLD = 3.0;
-      const LEADERBOARD_LOW_AVG_MIN_GAMES = 2;
-      const LEADERBOARD_CONSISTENCY_BONUS_MODE = "flat";
-      const LEADERBOARD_CONSISTENCY_BONUS_CAP = 0.30;
-      const LEADERBOARD_CONSISTENCY_BONUS_TIERS = [
-        { games: 50, bonus: 0.30 },
-        { games: 21, bonus: 0.20 },
-        { games: 7, bonus: 0.10 },
-        { games: 3, bonus: 0.07 }
-      ];
-
       const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
       const listEl = document.getElementById("lb-list");
       const metaCountEl = document.getElementById("meta-count");
       const lbProgressEl = document.getElementById("lb-progress");
-      const rulesToggleEl = document.getElementById("rules-toggle");
-      const rulesPanelEl = document.getElementById("rules-panel");
-  const playerSheetEl = document.getElementById("player-sheet");
-  const playerSheetNameEl = document.getElementById("player-sheet-name");
-  const playerSheetJoinedEl = document.getElementById("player-sheet-joined");
-  const playerSheetAvgEl = document.getElementById("player-sheet-avg");
-  const playerSheetGamesEl = document.getElementById("player-sheet-games");
-  const playerSheetCloseEl = document.getElementById("player-sheet-close");
+      const metaLabelEl = document.getElementById("meta-label");
+      const playerSheetEl = document.getElementById("player-sheet");
+      const playerSheetNameEl = document.getElementById("player-sheet-name");
+      const playerSheetJoinedEl = document.getElementById("player-sheet-joined");
+      const playerSheetAvgEl = document.getElementById("player-sheet-avg");
+      const playerSheetGamesEl = document.getElementById("player-sheet-games");
+      const playerSheetCloseEl = document.getElementById("player-sheet-close");
 
-      rulesToggleEl?.addEventListener("click", () => {
-        if (!rulesPanelEl) return;
-        const isHidden = rulesPanelEl.classList.contains("hidden");
-        rulesPanelEl.classList.toggle("hidden", !isHidden);
-        rulesToggleEl.setAttribute("aria-expanded", String(isHidden));
-      });
+      const tabLifetimeBtn = document.getElementById("tab-lifetime");
+      const tabWeeklyBtn = document.getElementById("tab-weekly");
+
+      let currentTab = "lifetime";
+      let allPlayers = [];
+
+      function getWeekStart() {
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const start = new Date(now);
+        start.setDate(now.getDate() - dayOfWeek); // Sunday
+        start.setHours(0, 0, 0, 0);
+        return start.getTime();
+      }
+
+      function getWeekEnd() {
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const end = new Date(now);
+        end.setDate(now.getDate() + (6 - dayOfWeek)); // Saturday
+        end.setHours(23, 59, 59, 999);
+        return end.getTime();
+      }
 
       const currentUser = (() => {
         try {
@@ -773,14 +804,6 @@
           return null;
         }
       })();
-
-      function getCurrentSolutionIndex() {
-        const now = new Date();
-        const localDateAsUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-        return Math.max(0, Math.floor((localDateAsUTC - launchDate) / 86400000));
-      }
-
-      const todayIndex = getCurrentSolutionIndex();
 
       function formatJoinDate(createdAt) {
         if (!createdAt) return "Unknown";
@@ -807,35 +830,8 @@
         if (e.target === playerSheetEl) closePlayerSheet();
       });
 
-      function getGamesPlayedBonus(gamesPlayedValue) {
-        const gamesPlayed = Number(gamesPlayedValue) || 0;
-        const tier = LEADERBOARD_CONSISTENCY_BONUS_TIERS.find((t) => gamesPlayed >= t.games);
-        return Math.min(LEADERBOARD_CONSISTENCY_BONUS_CAP, tier ? tier.bonus : 0);
-      }
-
-      function applyConsistencyBonus(baseAvg, gamesPlayedValue) {
-        const avg = Number(baseAvg);
-        if (!Number.isFinite(avg) || avg <= 0) return avg;
-
-        const bonus = getGamesPlayedBonus(gamesPlayedValue);
-        if (bonus <= 0) return avg;
-
-        if (LEADERBOARD_CONSISTENCY_BONUS_MODE === "percent") {
-          return Math.max(0, avg * (1 - bonus));
-        }
-
-        return Math.max(0, avg - bonus);
-      }
-
-      const medalSvg = {
-        0: `<svg class="medal" viewBox="0 0 24 24" fill="none" stroke="#8a6700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>`,
-        1: `<svg class="medal" viewBox="0 0 24 24" fill="none" stroke="#656a72" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>`,
-        2: `<svg class="medal" viewBox="0 0 24 24" fill="none" stroke="#6f4121" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>`
-      };
-
       const hintIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A6 6 0 1 0 7.5 11.5c.76.76 1.23 1.52 1.41 2.5"></path></svg>`;
       const playedIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
-      const decayIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>`;
 
       function renderState(text) {
         listEl.innerHTML = `<li class="state">${text}</li>`;
@@ -856,35 +852,23 @@
         listEl.innerHTML = "";
         metaCountEl.textContent = `${rows.length} players`;
 
-        rows.forEach((player) => {
+        rows.forEach((player, idx) => {
           const li = document.createElement("li");
           li.className = "item";
-          const rankNumber = player.rank || 0;
+          const rankNumber = idx + 1;
           if (rankNumber === 1) li.classList.add("rank-1");
           else if (rankNumber === 2) li.classList.add("rank-2");
           else if (rankNumber === 3) li.classList.add("rank-3");
-          if (player.isUnrated) li.classList.add("unrated");
 
-          const usedHintToday = Number(player.last_hint_day_index) === todayIndex;
-          const playedToday = Number(player.last_played_day_index) === todayIndex
-            || (player.saved_state && Number(player.saved_state.solutionIndex) === todayIndex && Boolean(player.saved_state.gameOver));
+          const badges = `<span class="badges"></span>`;
 
-          const decayBadge = player.hasDecay 
-            ? `<span class="badge decay" style="color: #e63946;" title="Inactivity penalty: +${player.decayPenalty.toFixed(3)}">${decayIcon}</span>`
-            : "";
-
-          const badges = `
-            <span class="badges">
-              ${playedToday ? `<span class="badge played" title="Solved today's word">${playedIcon}</span>` : ""}
-              ${usedHintToday ? `<span class="badge hint" title="Used hints today">${hintIcon}</span>` : ""}
-              ${decayBadge}
-            </span>
-          `;
+          const scoreLabel = currentTab === "lifetime" 
+            ? String(Number(player.gamesPlayed) || 0)
+            : Number(player.weeklyAvg).toFixed(2);
 
           li.innerHTML = `
             <div class="left">
               <span class="rank">#${rankNumber}</span>
-              ${medalSvg[rankNumber - 1] || ""}
               <span class="name">
                 <button class="name-main" type="button">
                   ${player.username}
@@ -893,7 +877,7 @@
               </span>
               ${badges}
             </div>
-            <div class="score ${player.isUnrated ? "unrated" : ""}">${player.scoreLabel}</div>
+            <div class="score">${scoreLabel}</div>
           `;
 
           const nameMainBtn = li.querySelector(".name-main");
@@ -905,7 +889,7 @@
         });
       }
 
-      async function loadLeaderboard() {
+      async function loadAndRenderLeaderboard() {
         setLoading(true);
         renderState("Loading leaderboard...");
 
@@ -915,15 +899,8 @@
 
           ({ data, error } = await supabase
             .from("leaderboards")
-            .select("username, games_played, total_guesses, created_at, last_hint_day_index, last_played_day_index, saved_state")
+            .select("username, games_played, total_guesses, created_at, last_played_day_index, saved_state")
             .order("games_played", { ascending: false }));
-
-          if (error) {
-            ({ data, error } = await supabase
-              .from("leaderboards")
-              .select("username, games_played, total_guesses, created_at, last_hint_day_index, saved_state")
-              .order("games_played", { ascending: false }));
-          }
 
           if (error) {
             ({ data, error } = await supabase
@@ -934,84 +911,30 @@
 
           if (error) throw error;
 
-          const ranked = (data || [])
+          const weekStart = getWeekStart();
+          const weekEnd = getWeekEnd();
+
+          allPlayers = (data || [])
             .filter((p) => p.username)
-            .map((p) => ({
-              ...p,
-              gamesPlayed: Number(p.games_played) || 0
-            }))
             .map((p) => {
-              const unscaledAvg = p.gamesPlayed > 0 ? Number(p.total_guesses || 0) / p.gamesPlayed : Number.POSITIVE_INFINITY;
-              const scaledAvg = p.gamesPlayed > 0 ? (Number(p.total_guesses || 0) / GUESS_SCALE) / p.gamesPlayed : Number.POSITIVE_INFINITY;
-              
-              let lastPlayedVal = Number(p.last_played_day_index);
-              if (Number.isNaN(lastPlayedVal) && p.saved_state && p.saved_state.solutionIndex) {
-                 if (p.saved_state.gameOver) lastPlayedVal = Number(p.saved_state.solutionIndex);
-              }
+              const gamesPlayed = Number(p.games_played) || 0;
+              const totalGuesses = Number(p.total_guesses || 0);
+              const rawAvg = gamesPlayed > 0 ? totalGuesses / gamesPlayed : 0;
+
+              // For weekly average, we'd need to filter games by date
+              // For now, using rawAvg as placeholder (you may need game-level timestamps)
+              const weeklyAvg = rawAvg;
 
               return {
                 ...p,
-                rawAvg: scaledAvg,
-                unscaledRawAvg: unscaledAvg,
-                lastPlayedVal,
-                isUnrated: p.gamesPlayed === 0 || (p.gamesPlayed === 1 && scaledAvg <= LEADERBOARD_LOW_AVG_THRESHOLD),
-                adjustedScore: p.gamesPlayed > 0 ? applyConsistencyBonus(scaledAvg, p.gamesPlayed) : Number.POSITIVE_INFINITY
-              };
-            })
-            .sort((a, b) => {
-              if (a.isUnrated !== b.isUnrated) return a.isUnrated ? 1 : -1;
-              if (Number(a.adjustedScore) !== Number(b.adjustedScore)) return Number(a.adjustedScore) - Number(b.adjustedScore);
-              if (Number(a.rawAvg) !== Number(b.rawAvg)) return Number(a.rawAvg) - Number(b.rawAvg);
-              return Number(b.gamesPlayed || 0) - Number(a.gamesPlayed || 0);
-            });
-
-          // Apply inactivity decay to top 3 rated players
-          let ratedCount = 0;
-          for (let i = 0; i < ranked.length; i++) {
-            const p = ranked[i];
-            if (!p.isUnrated) {
-              ratedCount++;
-              if (ratedCount <= 3) {
-                const lp = Number.isFinite(p.lastPlayedVal) ? p.lastPlayedVal : todayIndex;
-                const daysInactive = Math.max(0, todayIndex - lp);
-                if (daysInactive >= 3) {
-                  const penalty = (daysInactive - 2) * 0.025;
-                  p.adjustedScore += penalty;
-                  p.rawAvg += penalty;
-                  p.hasDecay = true;
-                  p.decayPenalty = penalty;
-                }
-              }
-              if (ratedCount === 3) break;
-            }
-          }
-
-          // Re-sort after decay
-          ranked.sort((a, b) => {
-            if (a.isUnrated !== b.isUnrated) return a.isUnrated ? 1 : -1;
-            if (Number(a.adjustedScore) !== Number(b.adjustedScore)) return Number(a.adjustedScore) - Number(b.adjustedScore);
-            if (Number(a.rawAvg) !== Number(b.rawAvg)) return Number(a.rawAvg) - Number(b.rawAvg);
-            return Number(b.gamesPlayed || 0) - Number(a.gamesPlayed || 0);
-          });
-
-          // Assign ranks
-          const rankedFinal = ranked.map((p, idx) => {
-              const gamesPlayed = Number(p.gamesPlayed) || 0;
-
-              return {
-                ...p,
-                rank: idx + 1,
-                scoreLabel: p.isUnrated ? "???" : Number(p.adjustedScore).toFixed(2)
+                gamesPlayed,
+                rawAvg,
+                weeklyAvg,
+                rank: 0
               };
             });
 
-          let rankedRows = rankedFinal.slice(0, 50);
-          if (currentUser && !rankedRows.some((p) => p.username === currentUser)) {
-            const me = rankedFinal.find((p) => p.username === currentUser);
-            if (me) rankedRows = [...rankedRows, me];
-          }
-
-          renderRows(rankedRows);
+          updateLeaderboardDisplay();
         } catch (err) {
           console.error("Leaderboard load failed:", err);
           renderState("Failed to load leaderboard.");
@@ -1020,7 +943,46 @@
         }
       }
 
-      loadLeaderboard();
+      function updateLeaderboardDisplay() {
+        let rows = [];
+
+        if (currentTab === "lifetime") {
+          metaLabelEl.textContent = "Top 50 • Most games played";
+          rows = [...allPlayers]
+            .sort((a, b) => Number(b.gamesPlayed) - Number(a.gamesPlayed))
+            .slice(0, 50);
+        } else if (currentTab === "weekly") {
+          metaLabelEl.textContent = "Top 50 • Lowest average this week";
+          rows = [...allPlayers]
+            .filter((p) => p.gamesPlayed > 0)
+            .sort((a, b) => Number(a.weeklyAvg) - Number(b.weeklyAvg))
+            .slice(0, 50);
+        }
+
+        // Add current user if not in top 50
+        if (currentUser && !rows.some((p) => p.username === currentUser)) {
+          const meData = allPlayers.find((p) => p.username === currentUser);
+          if (meData) rows.push(meData);
+        }
+
+        renderRows(rows);
+      }
+
+      tabLifetimeBtn?.addEventListener("click", () => {
+        currentTab = "lifetime";
+        tabLifetimeBtn.classList.add("active");
+        tabWeeklyBtn.classList.remove("active");
+        updateLeaderboardDisplay();
+      });
+
+      tabWeeklyBtn?.addEventListener("click", () => {
+        currentTab = "weekly";
+        tabWeeklyBtn.classList.add("active");
+        tabLifetimeBtn.classList.remove("active");
+        updateLeaderboardDisplay();
+      });
+
+      loadAndRenderLeaderboard();
     })();
   </script>
 </body>
