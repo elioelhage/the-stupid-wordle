@@ -919,7 +919,8 @@
             .map((p) => {
               const gamesPlayed = Number(p.games_played) || 0;
               const totalGuesses = Number(p.total_guesses || 0);
-              const rawAvg = gamesPlayed > 0 ? totalGuesses / gamesPlayed : 0;
+              const GUESS_SCALE = 10; // Original system stored guesses * 10
+              const rawAvg = gamesPlayed > 0 ? (totalGuesses / GUESS_SCALE) / gamesPlayed : 0;
 
               // For weekly average, we'd need to filter games by date
               // For now, using rawAvg as placeholder (you may need game-level timestamps)
