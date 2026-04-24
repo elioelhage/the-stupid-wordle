@@ -14,7 +14,10 @@
         var theme = saved || (prefersDark ? "dark" : "light");
         document.documentElement.setAttribute("data-theme", theme);
         var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", theme === "dark" ? "#121213" : "#ffffff");
+        if (meta) meta.setAttribute("con          ({ data, error } = await supabase
+            .from("leaderboards")
+            .select("username, games_played, total_guesses, created_at, saved_state")
+            .order("games_played", { ascending: false }));", theme === "dark" ? "#121213" : "#ffffff");
       } catch (_) {}
     })();
   </script>
@@ -891,7 +894,7 @@
 
           let { data, error } = await supabase
             .from("leaderboards")
-            .select("username, games_played, total_guesses, created_at, last_played_day_index")
+            .select("username, games_played, total_guesses, created_at, saved_state")
             .order("games_played", { ascending: false });
 
           if (error) {
@@ -916,9 +919,17 @@
               const GUESS_SCALE = 10;
               const rawAvg = gamesPlayed > 0 ? (totalGuesses / GUESS_SCALE) / gamesPlayed : 0;
 
-              let lastPlayedVal = Number(p.last_played_day_index);
-              if (Number.isNaN(lastPlayedVal) || lastPlayedVal === null) {
-                lastPlayedVal = todayIndex; // Assume recent if unknown
+              // Extract last played day from saved_state JSON
+              let lastPlayedVal = todayIndex;
+              try {
+                if (p.saved_state) {
+                  const state = typeof p.saved_state === 'string' ? JSON.parse(p.saved_state) : p.saved_state;
+                  if (state && state.solutionIndex !== undefined) {
+                    lastPlayedVal = Number(state.solutionIndex);
+                  }
+                }
+              } catch (e) {
+                console.warn("Could not parse saved_state for", p.username, e);
               }
 
               const daysSinceLastPlayed = Math.max(0, todayIndex - lastPlayedVal);
