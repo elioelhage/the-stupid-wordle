@@ -778,6 +778,8 @@
       let currentTab = "lifetime";
       let allPlayers = [];
 
+      const launchDate = Date.UTC(2026, 3, 1); // April 1, 2026
+
       function getCurrentSolutionIndex() {
         const now = new Date();
         const localDateAsUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
@@ -785,7 +787,6 @@
       }
 
       const todayIndex = getCurrentSolutionIndex();
-      const launchDate = Date.UTC(2026, 3, 1); // April 1, 2026
 
       const currentUser = (() => {
         try {
