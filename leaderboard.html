@@ -836,12 +836,12 @@
       </div>
     </header>
     
-    <p class="leaderboard-info">Compare your performance with other players. Switch between lifetime games and this week's lowest average.</p>
+    <p class="leaderboard-info">Compare your performance with other players. Switch between most games played and all-time lowest average.</p>
 
     <section class="shell" aria-label="Leaderboard list">
       <div class="tabs">
         <button id="tab-weekly" class="tab-btn active" type="button" data-tab="weekly">
-          This Week • Lowest Average
+          All Time • Lowest Average
         </button>
         <button id="tab-lifetime" class="tab-btn" type="button" data-tab="lifetime">
           Lifetime • Most Games
@@ -849,7 +849,7 @@
       </div>
 
       <div class="meta">
-        <span id="meta-label">Top 50 • Lowest average this week</span>
+        <span id="meta-label">Top 50 • All-time lowest average</span>
         <span id="meta-count"></span>
       </div>
       <div id="lb-progress" class="lb-progress" aria-hidden="true">
@@ -920,7 +920,6 @@
 
       let currentTab = "weekly";
       let allPlayers = [];
-      let weeklyStatsLoaded = true;
 
       const launchDate = Date.UTC(2026, 3, 1); // April 1, 2026
 
@@ -1016,9 +1015,9 @@
           }
           const badges = `<span class="badges">${badgesHtml}</span>`;
 
-          const scoreLabel = currentTab === "lifetime" 
+          const scoreLabel = currentTab === "lifetime"
             ? String(Number(player.gamesPlayed) || 0)
-            : Number(player.weeklyAvg).toFixed(2);
+            : Number(player.rawAvg).toFixed(2);
 
           li.innerHTML = `
             <div class="left">
@@ -1071,8 +1070,7 @@
             return;
           }
 
-          // Weekly filter: use all-time average but only include players who played in the last 7 days
-          // (No backend fetch needed - filter client-side using lastPlayedVal)
+          // Lowest-average tab uses all-time average across all players with played games.
 
           allPlayers = (data || [])
             .filter((p) => p.username)
@@ -1099,9 +1097,6 @@
                 console.warn("Could not parse saved_state for", p.username, e);
               }
 
-              // Weekly filter: check if player has played in the last 7 days
-              const playedThisWeek = p.lastPlayedVal >= (todayIndex - 6);
-
               return {
                 ...p,
                 gamesPlayed,
@@ -1109,7 +1104,6 @@
                 lastPlayedVal,
                 wonToday,
                 hintsUsedToday,
-                playedThisWeek,
                 rank: 0
               };
             });
@@ -1135,9 +1129,9 @@
             .sort((a, b) => Number(b.gamesPlayed) - Number(a.gamesPlayed))
             .slice(0, 50);
         } else if (currentTab === "weekly") {
-          metaLabelEl.textContent = "Top 50 • Lowest average (played last 7 days)";
+          metaLabelEl.textContent = "Top 50 • All-time lowest average";
           rows = [...allPlayers]
-            .filter((p) => p.playedThisWeek && p.gamesPlayed > 0)
+            .filter((p) => p.gamesPlayed > 0)
             .sort((a, b) => Number(a.rawAvg) - Number(b.rawAvg))
             .slice(0, 50);
         }
@@ -1145,7 +1139,7 @@
         // Add current user if not in top 50
         if (currentUser && !rows.some((p) => p.username === currentUser)) {
           const meData = allPlayers.find((p) => p.username === currentUser);
-          if (meData && (currentTab === "lifetime" || meData.playedThisWeek)) rows.push(meData);
+          if (meData && (currentTab === "lifetime" || Number(meData.gamesPlayed) > 0)) rows.push(meData);
         }
 
         renderRows(rows);
