@@ -646,6 +646,29 @@ a.icon-button {
 
 .primary-button { width: 100%; border: none; border-radius: 14px; background: var(--text); color: var(--bg); padding: 0.9rem 1rem; font-weight: 800; cursor: pointer; }
 
+.secondary-button {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.9rem 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.confirm-actions .primary-button,
+.confirm-actions .secondary-button {
+  width: auto;
+  flex: 1 1 0;
+}
+
 .close-top-right { position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 24px; color: var(--muted); cursor: pointer; }
 
 .text-input { width: 100%; padding: 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 1rem; margin-top: 1rem; font-family: inherit; }

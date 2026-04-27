@@ -15,7 +15,7 @@
         document.documentElement.setAttribute("data-theme", theme);
         var meta = document.querySelector('meta[name="theme-color"]');
         if (meta) {
-          var color = theme === "dark" ? "#121213" : (theme === "passaflora" ? "#eaf9ef" : "#ffffff");
+          var color = theme === "dark" ? "#121213" : "#ffffff";
           meta.setAttribute("content", color);
         }
       } catch (_) {}
@@ -183,6 +183,18 @@
         <li><strong>Total games played:</strong> <span id="player-sheet-games">—</span></li>
       </ul>
       <button id="player-sheet-close" class="player-sheet-close" type="button">Close</button>
+    </div>
+  </div>
+
+  <div id="give-up-confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="give-up-confirm-title">
+    <div class="modal__card">
+      <p class="modal__kicker">Are you sure?</p>
+      <h2 id="give-up-confirm-title" class="modal__title">Giving up reveals the word.</h2>
+      <p class="modal__countdown">Your game will not count on the leaderboard. Today will be treated as no result.</p>
+      <div class="confirm-actions">
+        <button id="give-up-confirm-cancel" class="secondary-button" type="button">Cancel</button>
+        <button id="give-up-confirm-yes" class="primary-button" type="button">Give up and reveal</button>
+      </div>
     </div>
   </div>
 

@@ -97,6 +97,9 @@
   const playerSheetAvgEl = document.getElementById("player-sheet-avg");
   const playerSheetGamesEl = document.getElementById("player-sheet-games");
   const playerSheetCloseEl = document.getElementById("player-sheet-close");
+  const giveUpConfirmModal = document.getElementById("give-up-confirm-modal");
+  const giveUpConfirmYesBtn = document.getElementById("give-up-confirm-yes");
+  const giveUpConfirmCancelBtn = document.getElementById("give-up-confirm-cancel");
   const leaderboardModal = document.getElementById("leaderboard-modal");
   const closeLeaderboardBtn = document.getElementById("close-leaderboard");
   const leaderboardCard = document.querySelector(".leaderboard-card");
@@ -688,11 +691,12 @@
   function setupTheme() {
     const savedTheme = localStorage.getItem(themeKey);
     const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
+    const initialTheme = savedTheme === "passaflora" ? "light" : (savedTheme || (prefersDark ? "dark" : "light"));
     setTheme(initialTheme);
+    if (savedTheme === "passaflora") localStorage.setItem(themeKey, "light");
 
     themeToggle.addEventListener("click", () => {
-      const themeOrder = ["light", "dark", "passaflora"];
+      const themeOrder = ["light", "dark"];
       const currentTheme = document.body.dataset.theme || "light";
       const currentIndex = Math.max(0, themeOrder.indexOf(currentTheme));
       const nextTheme = themeOrder[(currentIndex + 1) % themeOrder.length];
@@ -706,19 +710,17 @@
   }
 
   function setTheme(theme) {
+    if (theme === "passaflora") theme = "light";
     document.documentElement.dataset.theme = theme;
     document.body.dataset.theme = theme;
     if (theme === "dark") {
-      themeToggle.setAttribute("aria-label", "Switch theme (next: Passaflora)");
-      themeIcon.innerHTML = sunIcon();
-    } else if (theme === "passaflora") {
       themeToggle.setAttribute("aria-label", "Switch theme (next: Light)");
-      themeIcon.innerHTML = flowerIcon();
+      themeIcon.innerHTML = sunIcon();
     } else {
       themeToggle.setAttribute("aria-label", "Switch theme (next: Dark)");
       themeIcon.innerHTML = moonIcon();
     }
-    const themeColor = theme === "dark" ? "#121213" : (theme === "passaflora" ? "#eaf9ef" : "#ffffff");
+    const themeColor = theme === "dark" ? "#121213" : "#ffffff";
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", themeColor);
   }
 
@@ -747,6 +749,14 @@
       <circle cx="6.8" cy="15" r="2.4"></circle>
       <circle cx="6.8" cy="9" r="2.4"></circle>
     `;
+  }
+
+  function openGiveUpConfirm() {
+    giveUpConfirmModal?.classList.remove("hidden");
+  }
+
+  function closeGiveUpConfirm() {
+    giveUpConfirmModal?.classList.add("hidden");
   }
 
   function buildBoard() {
@@ -931,6 +941,16 @@
     });
     walkthroughModal?.addEventListener("click", (e) => {
       if (e.target === walkthroughModal) closeWalkthrough(true);
+    });
+
+    giveUpConfirmYesBtn?.addEventListener("click", () => {
+      closeGiveUpConfirm();
+      giveUpRound("hint");
+    });
+
+    giveUpConfirmCancelBtn?.addEventListener("click", closeGiveUpConfirm);
+    giveUpConfirmModal?.addEventListener("click", (e) => {
+      if (e.target === giveUpConfirmModal) closeGiveUpConfirm();
     });
 
     saveUsernameBtn.addEventListener("click", async () => {
@@ -1213,6 +1233,7 @@
     usernameError.classList.add("hidden");
     const freshUser = { uuid: crypto.randomUUID(), username: null };
     localStorage.setItem(userKey, JSON.stringify(freshUser));
+    localStorage.removeItem(storageKey);
     statsView.classList.add("hidden");
     usernameView.classList.remove("hidden");
     refreshAccountMenuAction();
@@ -1282,6 +1303,7 @@
     if (accountMenuLabel) accountMenuLabel.textContent = userData?.username ? "Account" : "Sign in";
     accountMenuButton?.classList.toggle("signed-in", Boolean(userData?.username));
     accountMenuButton?.classList.toggle("signed-out", !userData?.username);
+    if (accountMenuLabel) accountMenuLabel.textContent = userData?.username ? userData.username : "Sign in";
     if (accountSummary) {
       if (userData?.username) {
         accountSummary.textContent = `Signed in as ${userData.username}`;
@@ -1596,7 +1618,7 @@
     if (gameOver || isSubmitting) return;
 
     if (hintsUsed >= maxHints) {
-      giveUpRound("hint");
+      openGiveUpConfirm();
       return;
     }
 

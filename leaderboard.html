@@ -920,6 +920,7 @@
 
       let currentTab = "weekly";
       let allPlayers = [];
+      let weeklyStatsLoaded = true;
 
       const launchDate = Date.UTC(2026, 3, 1); // April 1, 2026
 
@@ -1070,31 +1071,28 @@
             return;
           }
 
-          // Fetch weekly session data (last 7 days) and aggregate per-user
-          const weekFrom = Math.max(0, todayIndex - 6);
-          let weeklySessions = [];
+          // Weekly stats come from the backend because the daily sessions table is RLS-protected.
+          const weekFrom = Math.max(0, todayIndex - 7);
+          const weeklyMap = new Map();
+          weeklyStatsLoaded = false;
           try {
-            const { data: wsData, error: wsErr } = await supabase
-              .from('wordle_daily_sessions')
-              .select('principal_key, guess_count, day_index')
-              .gte('day_index', weekFrom);
-            if (!wsErr && Array.isArray(wsData)) weeklySessions = wsData;
+            const weeklyRes = await fetch(`${API_URL}/api/weekly-stats?weekFrom=${weekFrom}`);
+            const weeklyJson = await weeklyRes.json();
+            if (weeklyJson?.ok && Array.isArray(weeklyJson.stats)) {
+              weeklyJson.stats.forEach((entry) => {
+                if (entry?.uuid) weeklyMap.set(String(entry.uuid), entry);
+              });
+              weeklyStatsLoaded = true;
+            } else {
+              console.warn('Weekly stats endpoint returned no data:', weeklyJson);
+            }
           } catch (e) {
-            console.warn('Could not fetch weekly sessions:', e);
+            console.warn('Could not fetch weekly stats from backend:', e);
           }
 
-          const weeklyMap = new Map();
-          weeklySessions.forEach((s) => {
-            try {
-              const pk = String(s.principal_key || '');
-              if (!pk.startsWith('user:')) return;
-              const uuid = pk.slice(5);
-              const entry = weeklyMap.get(uuid) || { totalGuesses: 0, games: 0 };
-              entry.totalGuesses += Number(s.guess_count) || 0;
-              entry.games += 1;
-              weeklyMap.set(uuid, entry);
-            } catch (e) { /* ignore row */ }
-          });
+          if (!weeklyStatsLoaded) {
+            console.warn('Weekly leaderboard data is unavailable right now.');
+          }
 
           allPlayers = (data || [])
             .filter((p) => p.username)
@@ -1123,8 +1121,10 @@
 
               // Weekly average: compute from wordle_daily_sessions for last 7 days if available
               const weeklyStat = weeklyMap.get(String(p.uuid));
-              const playedThisWeek = Boolean(weeklyStat && weeklyStat.games > 0);
-              const weeklyAvg = playedThisWeek ? (weeklyStat.totalGuesses / weeklyStat.games) : rawAvg;
+              const playedThisWeek = Boolean(weeklyStat && Number(weeklyStat.gamesPlayed) > 0);
+              const weeklyAvg = playedThisWeek
+                ? (Number(weeklyStat.totalGuesses) / Number(weeklyStat.gamesPlayed))
+                : rawAvg;
 
               return {
                 ...p,
@@ -1160,6 +1160,11 @@
             .sort((a, b) => Number(b.gamesPlayed) - Number(a.gamesPlayed))
             .slice(0, 50);
         } else if (currentTab === "weekly") {
+          if (!weeklyStatsLoaded) {
+            listEl.classList.remove("tab-switching");
+            renderState("Weekly leaderboard is unavailable right now.");
+            return;
+          }
           metaLabelEl.textContent = "Top 50 • Lowest average this week";
           rows = [...allPlayers]
             .filter((p) => p.playedThisWeek && p.gamesPlayed > 0)
@@ -1170,7 +1175,7 @@
         // Add current user if not in top 50
         if (currentUser && !rows.some((p) => p.username === currentUser)) {
           const meData = allPlayers.find((p) => p.username === currentUser);
-          if (meData) rows.push(meData);
+          if (meData && (currentTab === "lifetime" || meData.playedThisWeek)) rows.push(meData);
         }
 
         renderRows(rows);
