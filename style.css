@@ -374,6 +374,14 @@ a.icon-button {
   font-weight: 650;
 }
 
+.account-summary__line {
+  line-height: 1.3;
+}
+
+.account-summary__line + .account-summary__line {
+  margin-top: 0.18rem;
+}
+
 .account-menu-item {
   width: 100%;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);

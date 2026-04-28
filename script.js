@@ -853,8 +853,14 @@
         openAuthModal("Sign in to save progress and join races.");
         return;
       }
-      // When signed in, open the player's detail sheet (same info as leaderboard player sheet)
-      openPlayerSheetForCurrentUser();
+
+      // Signed-in users get a quick profile panel with account info and logout.
+      const isHidden = accountMenuPanel?.classList.contains("hidden");
+      accountMenuPanel?.classList.toggle("hidden", !isHidden);
+      accountMenuButton?.setAttribute("aria-expanded", String(Boolean(isHidden)));
+      if (isHidden) {
+        loadAccountSummaryForMenu();
+      }
     });
 
     accountActionBtn?.addEventListener("click", () => {
@@ -1307,12 +1313,57 @@
     if (accountMenuLabel) accountMenuLabel.textContent = userData?.username ? userData.username : "Sign in";
     if (accountSummary) {
       if (userData?.username) {
-        accountSummary.textContent = `Signed in as ${userData.username}`;
+        accountSummary.innerHTML = `<div class="account-summary__line"><strong>${userData.username}</strong></div><div class="account-summary__line">Loading account stats...</div>`;
         accountSummary.classList.remove("hidden");
       } else {
-        accountSummary.textContent = "";
+        accountSummary.innerHTML = "";
         accountSummary.classList.add("hidden");
       }
+    }
+  }
+
+  async function loadAccountSummaryForMenu() {
+    if (!accountSummary) return;
+    const userData = getUserData();
+    if (!userData?.username) {
+      accountSummary.innerHTML = "";
+      accountSummary.classList.add("hidden");
+      return;
+    }
+
+    const username = userData.username;
+    accountSummary.classList.remove("hidden");
+    accountSummary.innerHTML = `<div class="account-summary__line"><strong>${username}</strong></div><div class="account-summary__line">Loading account stats...</div>`;
+
+    if (!supabase) {
+      accountSummary.innerHTML = `<div class="account-summary__line"><strong>${username}</strong></div><div class="account-summary__line">Stats unavailable right now.</div>`;
+      return;
+    }
+
+    try {
+      const { data: rec, error } = await supabase
+        .from('leaderboards')
+        .select('created_at, games_played, total_guesses')
+        .eq('uuid', userData.uuid)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const games = Number(rec?.games_played) || 0;
+      const avg = (games > 0 && rec?.total_guesses)
+        ? ((Number(rec.total_guesses) / GUESS_SCALE) / games).toFixed(2)
+        : "-";
+      const joined = rec?.created_at ? new Date(rec.created_at).toLocaleDateString() : "Unknown";
+
+      accountSummary.innerHTML = `
+        <div class="account-summary__line"><strong>${username}</strong></div>
+        <div class="account-summary__line">Joined: ${joined}</div>
+        <div class="account-summary__line">Games: ${games}</div>
+        <div class="account-summary__line">Avg guesses: ${avg}</div>
+      `;
+    } catch (err) {
+      console.error('Failed to load account summary', err);
+      accountSummary.innerHTML = `<div class="account-summary__line"><strong>${username}</strong></div><div class="account-summary__line">Could not load stats.</div>`;
     }
   }
 
