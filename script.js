@@ -184,6 +184,7 @@
   let afternoonReminderInterval = null;
   let dayRolloverTimeout = null;
   let hasTriggeredDayReset = false;
+  let pendingGiveUpSource = "menu";
   let loaderFailsafeTimer = null;
   let walkthroughLengthTimer = null;
   let walkthroughLengthFrame = 0;
@@ -706,7 +707,9 @@
     });
 
     giveUpBtn?.addEventListener("click", () => {
-      giveUpRound("menu");
+      accountMenuPanel?.classList.add("hidden");
+      accountMenuButton?.setAttribute("aria-expanded", "false");
+      openGiveUpConfirm("menu");
     });
   }
 
@@ -752,7 +755,8 @@
     `;
   }
 
-  function openGiveUpConfirm() {
+  function openGiveUpConfirm(source = "menu") {
+    pendingGiveUpSource = source;
     giveUpConfirmModal?.classList.remove("hidden");
   }
 
@@ -952,7 +956,7 @@
 
     giveUpConfirmYesBtn?.addEventListener("click", () => {
       closeGiveUpConfirm();
-      giveUpRound("hint");
+      giveUpRound(pendingGiveUpSource);
     });
 
     giveUpConfirmCancelBtn?.addEventListener("click", closeGiveUpConfirm);
@@ -1251,6 +1255,7 @@
     setKeyboardLocked(false);
     hideEndModal();
     if (playerSheetEl) playerSheetEl.classList.remove("open");
+    document.body.classList.remove("player-sheet-open");
 
     showAppLoader("Refreshing...");
     safeHardRefresh(220);
@@ -1261,13 +1266,18 @@
     const userData = getUserData();
     if (!userData?.uuid) return;
     try {
+      const openSheet = () => {
+        playerSheetEl.classList.add("open");
+        document.body.classList.add("player-sheet-open");
+      };
+
       if (!supabase) {
         playerSheetNameEl.textContent = userData.username || "Unknown";
         playerSheetJoinedEl.textContent = "Unknown";
         playerSheetLastPlayEl.textContent = "Unknown";
         playerSheetAvgEl.textContent = "—";
         playerSheetGamesEl.textContent = "—";
-        playerSheetEl.classList.add("open");
+        openSheet();
         return;
       }
 
@@ -1294,14 +1304,19 @@
       const avg = (games > 0 && rec?.total_guesses) ? ((Number(rec.total_guesses) / GUESS_SCALE) / games).toFixed(2) : "—";
       playerSheetAvgEl.textContent = avg;
       playerSheetGamesEl.textContent = String(games);
-      playerSheetEl.classList.add("open");
+      openSheet();
     } catch (e) {
       console.error('Failed to open player sheet', e);
     }
   }
 
-  playerSheetCloseEl?.addEventListener("click", () => playerSheetEl?.classList.remove("open"));
-  playerSheetEl?.addEventListener("click", (e) => { if (e.target === playerSheetEl) playerSheetEl.classList.remove("open"); });
+  function closePlayerSheet() {
+    playerSheetEl?.classList.remove("open");
+    document.body.classList.remove("player-sheet-open");
+  }
+
+  playerSheetCloseEl?.addEventListener("click", closePlayerSheet);
+  playerSheetEl?.addEventListener("click", (e) => { if (e.target === playerSheetEl) closePlayerSheet(); });
 
   function refreshAccountMenuAction() {
     if (!accountActionBtn) return;
@@ -1633,16 +1648,9 @@
     hintBadge.classList.toggle("empty", noHintsLeft);
     hintButton?.classList.toggle("is-give-up", noHintsLeft);
 
-    const hintIconEl = hintButton?.querySelector("svg");
-    if (hintIconEl) {
-      hintIconEl.innerHTML = noHintsLeft
-        ? `<path d="M5 4v16"></path><path d="M5 5h11l-2.6 3 2.6 3H5"></path>`
-        : `<path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A6 6 0 1 0 7.5 11.5c.76.76 1.23 1.52 1.41 2.5"></path>`;
-    }
-
     if (hintButton) {
-      hintButton.setAttribute("aria-label", noHintsLeft ? "Give up and reveal word" : "Hint");
-      hintButton.setAttribute("title", noHintsLeft ? "Give up and reveal word" : "Hint");
+      hintButton.setAttribute("aria-label", noHintsLeft ? "No hints left" : "Hint");
+      hintButton.setAttribute("title", noHintsLeft ? "No hints left" : "Hint");
     }
   }
 
@@ -1670,7 +1678,7 @@
     if (gameOver || isSubmitting) return;
 
     if (hintsUsed >= maxHints) {
-      openGiveUpConfirm();
+      showMessage("No hints left. Use Give up in Account.");
       return;
     }
 
@@ -1685,7 +1693,9 @@
         return false;
       })();
 
-      const body = hasRepeat ? "This word contains repeated letters." : "This word contains no repeated letters.";
+      const body = hasRepeat
+        ? `This word <span style="color:#6aaa64; font-weight:800;">contains</span> repeated letters.`
+        : `This word <span style="color:#d9534f; font-weight:800;">doesn't contain</span> repeated letters.`;
       showHintPopup("Letter Pattern", body);
       hintsUsed++;
       updateHintBadge();
