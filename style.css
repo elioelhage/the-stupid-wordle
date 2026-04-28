@@ -1063,15 +1063,27 @@ select.text-input {
 
 #username-view {
   justify-content: center;
+  padding: 0.3rem 0.1rem 0.2rem;
+}
+
+.leaderboard-card:has(#username-view:not(.hidden)) {
+  width: min(94vw, 30rem);
+  min-height: auto;
+  padding: 1.35rem 1.1rem 1.1rem;
+}
+
+.leaderboard-card:has(#username-view:not(.hidden)) #close-leaderboard {
+  top: 10px;
+  right: 10px;
 }
 
 .join-auth-shell {
-  width: min(100%, 26rem);
+  width: min(100%, 24.8rem);
   margin: 0 auto;
-  padding: 1rem;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .join-auth-kicker {
@@ -1105,7 +1117,7 @@ select.text-input {
 #username-view .modal__countdown {
   margin: 0.45rem 0 0.1rem;
   line-height: 1.45;
-  max-width: 44ch;
+  max-width: none;
 }
 
 .text-input {
