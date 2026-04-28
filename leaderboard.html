@@ -836,12 +836,12 @@
       </div>
     </header>
     
-    <p class="leaderboard-info">Compare your performance with other players. Switch between most games played and all-time lowest average.</p>
+    <p class="leaderboard-info">Compare your performance with other players. Switch between most games played and leaderboard score (adjusted average).</p>
 
     <section class="shell" aria-label="Leaderboard list">
       <div class="tabs">
         <button id="tab-weekly" class="tab-btn active" type="button" data-tab="weekly">
-          All Time • Lowest Average
+          All Time • Leaderboard Score
         </button>
         <button id="tab-lifetime" class="tab-btn" type="button" data-tab="lifetime">
           Lifetime • Most Games
@@ -849,7 +849,7 @@
       </div>
 
       <div class="meta">
-        <span id="meta-label">Top 50 • All-time lowest average</span>
+        <span id="meta-label">Top 50 • Leaderboard score (adjusted)</span>
         <span id="meta-count"></span>
       </div>
       <div id="lb-progress" class="lb-progress" aria-hidden="true">
@@ -866,6 +866,8 @@
           <li><strong>Joined:</strong> <span id="player-sheet-joined">—</span></li>
           <li><strong>Last played:</strong> <span id="player-sheet-last-play">—</span></li>
           <li><strong>Raw avg guesses:</strong> <span id="player-sheet-avg">—</span></li>
+          <li><strong>Adjusted avg:</strong> <span id="player-sheet-adjusted">—</span></li>
+          <li><strong>Score:</strong> <span id="player-sheet-score">—</span></li>
           <li><strong>Total games played:</strong> <span id="player-sheet-games">—</span></li>
         </ul>
         <button id="player-sheet-close" class="player-sheet-close" type="button">Close</button>
@@ -912,6 +914,8 @@
       const playerSheetJoinedEl = document.getElementById("player-sheet-joined");
       const playerSheetLastPlayEl = document.getElementById("player-sheet-last-play");
       const playerSheetAvgEl = document.getElementById("player-sheet-avg");
+      const playerSheetAdjustedEl = document.getElementById("player-sheet-adjusted");
+      const playerSheetScoreEl = document.getElementById("player-sheet-score");
       const playerSheetGamesEl = document.getElementById("player-sheet-games");
       const playerSheetCloseEl = document.getElementById("player-sheet-close");
 
@@ -920,6 +924,10 @@
 
       let currentTab = "weekly";
       let allPlayers = [];
+      // Scoring constants (new leaderboard formula)
+      const GLOBAL_M = 3.985; // global average across all players
+      const K_CONFIDENCE = 7; // confidence constant to downweight small N
+      const MIN_GAMES_FOR_PUBLIC = 3; // minimum games to appear on public leaderboard
 
       const launchDate = Date.UTC(2026, 3, 1); // April 1, 2026
 
@@ -961,6 +969,8 @@
         playerSheetJoinedEl.textContent = formatJoinDate(player.created_at);
         playerSheetLastPlayEl.textContent = formatLastPlayDate(player.lastPlayedVal);
         playerSheetAvgEl.textContent = Number.isFinite(player.rawAvg) ? Number(player.rawAvg).toFixed(2) : "—";
+        playerSheetAdjustedEl.textContent = Number.isFinite(player.adjustedAvg) ? Number(player.adjustedAvg).toFixed(2) : "—";
+        playerSheetScoreEl.textContent = Number.isFinite(player.scoreRounded) ? String(player.scoreRounded) : "—";
         playerSheetGamesEl.textContent = String(Number(player.gamesPlayed) || 0);
         playerSheetEl.classList.add("open");
       }
@@ -1017,7 +1027,7 @@
 
           const scoreLabel = currentTab === "lifetime"
             ? String(Number(player.gamesPlayed) || 0)
-            : Number(player.rawAvg).toFixed(2);
+            : (Number.isFinite(player.scoreRounded) ? String(player.scoreRounded) : Number(player.rawAvg).toFixed(2));
 
           li.innerHTML = `
             <div class="left">
@@ -1080,6 +1090,15 @@
               const GUESS_SCALE = 10;
               const rawAvg = gamesPlayed > 0 ? (totalGuesses / GUESS_SCALE) / gamesPlayed : 0;
 
+              // Adjusted average blends player's raw avg with global M using confidence K
+              const N = gamesPlayed;
+              const A = rawAvg;
+              const K = K_CONFIDENCE;
+              const M = GLOBAL_M;
+              const adjustedAvg = N > 0 ? (N / (N + K)) * A + (K / (N + K)) * M : M;
+              const score = 1000 - 100 * adjustedAvg;
+              const scoreRounded = Number.isFinite(score) ? Math.round(score) : 0;
+
               // Extract last played day, win state and hints used from saved_state JSON
               let lastPlayedVal = -1;
               let wonToday = false;
@@ -1101,6 +1120,9 @@
                 ...p,
                 gamesPlayed,
                 rawAvg,
+                adjustedAvg,
+                score,
+                scoreRounded,
                 lastPlayedVal,
                 wonToday,
                 hintsUsedToday,
@@ -1129,10 +1151,10 @@
             .sort((a, b) => Number(b.gamesPlayed) - Number(a.gamesPlayed))
             .slice(0, 50);
         } else if (currentTab === "weekly") {
-          metaLabelEl.textContent = "Top 50 • All-time lowest average";
+          metaLabelEl.textContent = `Top 50 • Leaderboard score (min ${MIN_GAMES_FOR_PUBLIC} games)`;
           rows = [...allPlayers]
-            .filter((p) => p.gamesPlayed > 0)
-            .sort((a, b) => Number(a.rawAvg) - Number(b.rawAvg))
+            .filter((p) => Number(p.gamesPlayed) >= MIN_GAMES_FOR_PUBLIC)
+            .sort((a, b) => Number(b.score) - Number(a.score))
             .slice(0, 50);
         }
 
